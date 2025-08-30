@@ -1,3 +1,4 @@
+import 'package:echo_notes/ThemeProvider.dart';
 import 'package:echo_notes/provider_notes.dart';
 import 'package:echo_notes/screens/AddNote.dart';
 import 'package:echo_notes/screens/DetailScreen.dart';
@@ -22,6 +23,10 @@ class HomePage extends StatelessWidget{
       appBar: AppBar(
         title: Text('Echo Notes', style: TextStyle(fontWeight: FontWeight.bold),),
         centerTitle: true,
+        leading: IconButton(onPressed: (){
+          final provider = context.read<ThemeProvider>();
+          provider.saveTheme(value: !provider.getThemeValue());
+        }, icon: context.watch<ThemeProvider>().getThemeValue() ? Icon(Icons.dark_mode) : Icon(Icons.light_mode)),
         actions: [
           IconButton(onPressed: (){
             Navigator.push(context, MaterialPageRoute(builder: (context) => SearchScreen()));

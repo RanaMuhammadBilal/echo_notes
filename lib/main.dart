@@ -1,3 +1,4 @@
+import 'package:echo_notes/ThemeProvider.dart';
 import 'package:echo_notes/provider_notes.dart';
 import 'package:echo_notes/screens/HomePage.dart';
 import 'package:flutter/material.dart';
@@ -8,20 +9,25 @@ void main() async{
   WidgetsFlutterBinding.ensureInitialized();
   await Hive.initFlutter();
   await Hive.openBox('notesBox');
+  await Hive.openBox('settings');
   runApp(
-    ChangeNotifierProvider(create: (_) => NotesProvider(),
-    child: MyApp(),)
+    MultiProvider(providers: [
+      ChangeNotifierProvider(create: (_) => NotesProvider()),
+      ChangeNotifierProvider(create: (_)=> ThemeProvider()),
+    ], child: MyApp(),),
+
   );
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      themeMode: context.watch<ThemeProvider>().getThemeValue() ? ThemeMode.dark : ThemeMode.light,
+      darkTheme: ThemeData.dark(),
       theme: ThemeData(
 
       ),

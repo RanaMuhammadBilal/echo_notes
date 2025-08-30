@@ -1,4 +1,3 @@
-import 'package:echo_notes/screens/HomePage.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:echo_notes/provider_notes.dart';

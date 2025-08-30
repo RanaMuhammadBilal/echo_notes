@@ -27,7 +27,7 @@ class DetailScreen extends StatelessWidget{
         centerTitle: true,
         actions: [
           IconButton(onPressed: (){
-            textToSpeech(titleNote + contentNote);
+            textToSpeech(contentNote);
           }, icon: Icon(Icons.record_voice_over))
         ],
       ),
