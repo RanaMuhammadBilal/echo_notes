@@ -98,33 +98,37 @@ class _VoiceNoteState extends State<VoiceNote> {
         ],
       ),
       body:  Center(
-        child: Column(
+        child: ListView(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Card(
-                child: Padding(
+            Column(
+              children: [
+                Padding(
                   padding: const EdgeInsets.all(8.0),
-                  child: TextField(
-                    controller: controller,
-                    maxLines: 16,
-                    style: TextStyle(fontSize: 18),
-                    decoration: InputDecoration(
-                      hintText: 'Press on mic button to start speaking - click here to edit',
-                      border: InputBorder.none
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: TextField(
+                        controller: controller,
+                        maxLines: 16,
+                        style: TextStyle(fontSize: 18),
+                        decoration: InputDecoration(
+                          hintText: 'Press on mic button to start speaking - click here to edit',
+                          border: InputBorder.none
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(textAlign: TextAlign.center ,liveText, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500),),
+                Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Text(textAlign: TextAlign.justify ,liveText, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500),),
+                ),
+              ],
             ),
           ],
         ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: FloatingActionButton.large(
         onPressed: () async{
           if(await speechToText.hasPermission && speechToText.isNotListening){

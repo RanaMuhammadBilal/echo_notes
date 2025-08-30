@@ -45,24 +45,26 @@ class _DetailScreenState extends State<DetailScreen> {
           }, icon: Icon(Icons.record_voice_over))
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8, right: 8),
-          child: Text(widget.titleNote ,style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),),
-        ),
-        SizedBox(height: 20),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Padding(
-            padding: const EdgeInsets.only(left: 16),
-            child: Text(widget.timestamp,style: TextStyle(fontSize: 14, fontWeight: FontWeight.normal),),
+            padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8, right: 8),
+            child: Text(widget.titleNote ,style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),),
           ),
-        SizedBox(height: 20),
-        Padding(
-          padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8, right: 8),
-          child: Text(widget.contentNote ,style: TextStyle(fontSize: 22),),
-        ),
-      ],),
+          SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: Text(widget.timestamp,style: TextStyle(fontSize: 14, fontWeight: FontWeight.normal),),
+            ),
+          SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.only(left: 16, top: 8, bottom: 16, right: 16),
+            child: Text(widget.contentNote,textAlign: TextAlign.justify ,style: TextStyle(fontSize: 22),),
+          ),
+        ],),
+      ),
     );
   }
 }
