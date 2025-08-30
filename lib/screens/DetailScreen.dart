@@ -1,11 +1,17 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 class DetailScreen extends StatelessWidget{
 
   String titleNote, contentNote, timestamp;
   DetailScreen({required this.titleNote, required this.contentNote, required this.timestamp});
-
+  FlutterTts flutterTts = FlutterTts();
+  
+  void textToSpeech(String query) async{
+    await flutterTts.speak(query);
+  }
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -16,10 +22,14 @@ class DetailScreen extends StatelessWidget{
             Icon(Icons.note_rounded),
             SizedBox(width: 10,),
             Text('Note Detail'),
-            SizedBox(width: 20,),
           ],
         ),
         centerTitle: true,
+        actions: [
+          IconButton(onPressed: (){
+            textToSpeech(titleNote + contentNote);
+          }, icon: Icon(Icons.record_voice_over))
+        ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

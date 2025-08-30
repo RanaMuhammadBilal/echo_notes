@@ -38,7 +38,7 @@ class _EditNoteState extends State<EditNote> {
             Icon(Icons.edit_document),
             SizedBox(width: 10,),
             Text('Edit Note'),
-            SizedBox(width: 20,),
+
           ],
         ),
         centerTitle: true,

@@ -44,7 +44,7 @@ class SearchScreenState extends State<SearchScreen>{
             Icon(Icons.search),
             SizedBox(width: 10,),
             Text('Search'),
-            SizedBox(width: 40,),
+            SizedBox(width: 70,),
           ],
         ),
         centerTitle: true,
