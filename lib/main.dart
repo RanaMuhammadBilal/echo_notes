@@ -1,5 +1,7 @@
+import 'package:echo_notes/AuthenticationProvider.dart';
 import 'package:echo_notes/ThemeProvider.dart';
 import 'package:echo_notes/provider_notes.dart';
+import 'package:echo_notes/screens/AuthenticationPage.dart';
 import 'package:echo_notes/screens/HomePage.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -14,6 +16,7 @@ void main() async{
     MultiProvider(providers: [
       ChangeNotifierProvider(create: (_) => NotesProvider()),
       ChangeNotifierProvider(create: (_)=> ThemeProvider()),
+      ChangeNotifierProvider(create: (_)=>AuthenticationProvider()),
     ], child: MyApp(),),
 
   );
@@ -31,7 +34,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
 
       ),
-      home: HomePage(),
+      home: context.watch<AuthenticationProvider>().getAuthenticationValue() ? AuthenticationPage() : HomePage(),
     );
   }
 }
