@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../AuthenticationServices.dart';
+import '../provider_notes.dart';
 import 'TrashScreen.dart';
 
 class Settings extends StatefulWidget{
@@ -141,6 +142,33 @@ class SettingsState extends State<Settings> {
               trailing: Icon(Icons.chevron_right_rounded, color: colorScheme.onSurfaceVariant),
             ),
           ),
+          const SizedBox(height: 12),
+          Consumer<NotesProvider>(
+            builder: (context, notesProvider, _) {
+              return Card(
+                elevation: 0,
+                color: colorScheme.surfaceContainerHighest.withAlpha(80),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                clipBehavior: Clip.antiAlias,
+                child: SwitchListTile.adaptive(
+                  secondary: Icon(
+                      notesProvider.showNoteBorder
+                          ? Icons.border_all_rounded
+                          : Icons.border_clear_rounded,
+                      color: colorScheme.primary
+                  ),
+                  value: notesProvider.showNoteBorder,
+                  onChanged: (value) {
+                    notesProvider.toggleNoteBorder();
+                  },
+                  title: const Text('Editor Border', style: TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Show a framed border around your notes'),
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(height: 12),
         ],
       ),
     );

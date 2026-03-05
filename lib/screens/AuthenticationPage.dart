@@ -59,7 +59,11 @@ class AuthenticationPageState extends State<AuthenticationPage> {
   void biometric() async {
     bool check = await _authService.authenticateLocally();
     if (check && mounted) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomePage()));
+      // ✅ Use pushAndRemoveUntil to clear the entire history stack
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const HomePage()),
+            (Route<dynamic> route) => false, // This 'false' means remove all previous routes
+      );
     }
   }
 

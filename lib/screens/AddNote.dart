@@ -23,7 +23,7 @@ class _AddNoteState extends State<AddNote> {
   final ScrollController _editorScrollController = ScrollController();
 
   String _selectedCategory = "General";
-  bool _showBorder = true;
+
 
   @override
   void dispose() {
@@ -109,15 +109,27 @@ class _AddNoteState extends State<AddNote> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final dynamicCategories = context.watch<NotesProvider>().categories;
+    bool _showBorder = context.watch<NotesProvider>().showNoteBorder;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('New Note', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
-            onPressed: () => setState(() => _showBorder = !_showBorder),
-            icon: Icon(_showBorder ? Icons.border_clear : Icons.border_outer),
+            onPressed: () {
+              // Calls the logic in your NotesProvider to toggle and save to Hive
+              context.read<NotesProvider>().toggleNoteBorder();
+            },
+            icon: Icon(
+              // Listens to the current state to show the correct icon
+              context.watch<NotesProvider>().showNoteBorder
+                  ? Icons.border_clear
+                  : Icons.border_outer,
+            ),
             color: colorScheme.primary,
+            tooltip: context.watch<NotesProvider>().showNoteBorder
+                ? 'Remove Border'
+                : 'Show Border',
           ),
           IconButton(
             onPressed: _performOCR,
@@ -209,7 +221,7 @@ class _AddNoteState extends State<AddNote> {
                           width: double.infinity,
                           decoration: _showBorder
                               ? BoxDecoration(
-                            color: Colors.white,
+                            color: colorScheme.surface,
                             border: Border.all(color: colorScheme.outlineVariant),
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [

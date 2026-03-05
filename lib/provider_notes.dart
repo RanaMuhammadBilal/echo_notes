@@ -4,6 +4,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 class NotesProvider extends ChangeNotifier {
   final _box = Hive.box('notesBox');
   final _categoryBox = Hive.box('categoryBox');
+  final _settingsBox = Hive.box('settings');
+  bool _showNoteBorder = true;
+  bool get showNoteBorder => _showNoteBorder;
 
   List<Map<String, dynamic>> _notes = [];
   List<String> _categories = [];
@@ -33,6 +36,7 @@ class NotesProvider extends ChangeNotifier {
   NotesProvider() {
     loadNotes();
     loadCategories();
+    _loadBorderPreference();
     cleanUpTrash(); // Run 30-day cleanup automatically when app starts
   }
 
@@ -190,5 +194,19 @@ class NotesProvider extends ChangeNotifier {
       loadNotes();      // Refresh notes to show updated "General" tags
     }
   }
+  void _loadBorderPreference() {
+    // Fetches the value from settingsBox. Defaults to true if null.
+    _showNoteBorder = _settingsBox.get('showNoteBorder', defaultValue: true);
+    notifyListeners();
+  }
+
+  void toggleNoteBorder() {
+    _showNoteBorder = !_showNoteBorder;
+    // Save the new value to Hive immediately
+    _settingsBox.put('showNoteBorder', _showNoteBorder);
+    notifyListeners();
+  }
+
+
 
 }
