@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.bildroid.echo_notes.echo_notes"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "28.1.13356709"
+    ndkVersion = "29.0.14206865"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -32,8 +32,10 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Change these two to FALSE
+            isMinifyEnabled = false
+            isShrinkResources = false
+
             signingConfig = signingConfigs.getByName("debug")
         }
     }

@@ -1,92 +1,195 @@
-import 'package:flutter/cupertino.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:echo_notes/provider_notes.dart';
+import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:echo_notes/provider_notes.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:image_picker/image_picker.dart';
 
-class EditNote extends StatefulWidget{
-  int index;
-  String  title, content;
-  EditNote({required this.index, required this.title, required this.content});
+class EditNote extends StatefulWidget {
+  final dynamic index; // Using dynamic for Hive Keys
+  final String title, content;
+
+  const EditNote({
+    super.key,
+    required this.index,
+    required this.title,
+    required this.content
+  });
 
   @override
   State<EditNote> createState() => _EditNoteState();
 }
 
 class _EditNoteState extends State<EditNote> {
-  var titleController = TextEditingController();
-  var contentController = TextEditingController();
-  DateFormat formattedDate = DateFormat('d MMMM, y, h:mm a');
-
+  late QuillController _controller;
+  late TextEditingController _titleController;
+  final FocusNode _editorFocusNode = FocusNode();
+  final ScrollController _editorScrollController = ScrollController(); // Added Controller
+  String _selectedCategory = "General";
 
   @override
   void initState() {
     super.initState();
-    titleController.text = widget.title;
-    contentController.text = widget.content;
+    _titleController = TextEditingController(text: widget.title);
+
+    // Get existing category from Provider
+    final provider = context.read<NotesProvider>();
+    final noteData = provider.notes.firstWhere((n) => n['key'] == widget.index);
+    _selectedCategory = noteData['folder'] ?? "General";
+
+    try {
+      final List<dynamic> json = jsonDecode(widget.content);
+      _controller = QuillController(
+          document: Document.fromJson(json),
+          selection: const TextSelection.collapsed(offset: 0)
+      );
+    } catch (e) {
+      _controller = QuillController.basic()..document.insert(0, widget.content);
+    }
+  }
+
+  void _updateNote() {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) return;
+
+    final contentJson = jsonEncode(_controller.document.toDelta().toJson());
+    final timestamp = DateFormat('d MMMM, y, h:mm a').format(DateTime.now());
+
+    // Update the core note and ensure the folder is synced
+    context.read<NotesProvider>().editNote(widget.index, title, contentJson, timestamp);
+    context.read<NotesProvider>().moveNoteToFolder(widget.index, _selectedCategory);
+
+    Navigator.pop(context);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _titleController.dispose();
+    _editorFocusNode.dispose();
+    _editorScrollController.dispose(); // Clean up
+    super.dispose();
+  }
+
+  // Same OCR logic as AddNote for consistency
+  Future<void> _performOCR() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(leading: const Icon(Icons.camera_alt_outlined), title: const Text('Camera'), onTap: () => Navigator.pop(context, ImageSource.camera)),
+            ListTile(leading: const Icon(Icons.photo_library_outlined), title: const Text('Gallery'), onTap: () => Navigator.pop(context, ImageSource.gallery)),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: source);
+    if (image == null) return;
+
+    final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    try {
+      final RecognizedText recognizedText = await textRecognizer.processImage(InputImage.fromFilePath(image.path));
+      String scannedText = recognizedText.text.trim();
+      if (scannedText.isEmpty) return;
+
+      final index = _controller.selection.baseOffset;
+      final safeIndex = index < 0 ? _controller.document.length - 1 : index;
+      _controller.document.insert(safeIndex, "\n$scannedText\n");
+      _controller.updateSelection(TextSelection.collapsed(offset: safeIndex + scannedText.length + 2), ChangeSource.local);
+      setState(() {});
+    } finally {
+      textRecognizer.close();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final dynamicCategories = context.watch<NotesProvider>().categories;
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.edit_document),
-            SizedBox(width: 10,),
-            Text('Edit Note'),
-
-          ],
-        ),
-        centerTitle: true,
+        title: const Text('Edit Note', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(onPressed: (){
-              var titleC = titleController.text.toString();
-              var contentC = contentController.text.toString();
-              if(titleC.isEmpty || contentC.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Please fill all the fields!')));
-            }else{
-              context.read<NotesProvider>().editNote(widget.index, titleC, contentC, formattedDate.format(DateTime.now()).toString());
-              ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Note! Updated Saved!')));
-              Navigator.pop(context);
-
-            }
-          }, icon: Icon(Icons.save_as))
+          IconButton(onPressed: _performOCR, icon: Icon(Icons.document_scanner_outlined, color: colorScheme.primary)),
+          IconButton(onPressed: _updateNote, icon: Icon(Icons.save_as_rounded, size: 28,color: colorScheme.primary)),
         ],
       ),
-      body: Column(children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8, right: 8),
-          child: TextField(
-            style: TextStyle(fontSize: 24),
-            textInputAction: TextInputAction.next,
-            controller: titleController,
-            decoration: InputDecoration(
-              hintText: 'Title',
-              border: InputBorder.none,
-
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: TextField(
+              controller: _titleController,
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              decoration: const InputDecoration(hintText: 'Title', border: InputBorder.none),
             ),
-
           ),
-        ),
-        SizedBox(height: 20),
-        Padding(
-          padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8, right: 8),
-          child: TextField(
-              style: TextStyle(fontSize: 20),
-              controller: contentController,
-              maxLines: 16,
-              decoration: InputDecoration(
-                  hintText: 'Type Something...',
-                  border: InputBorder.none)
 
+          // THEME-ADAPTIVE CATEGORY SELECTOR
+          SizedBox(
+            height: 50,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: dynamicCategories.length,
+              itemBuilder: (context, index) {
+                final category = dynamicCategories[index];
+                bool isSelected = _selectedCategory == category;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(category),
+                    selected: isSelected,
+                    onSelected: (val) => setState(() => _selectedCategory = category),
+                    selectedColor: colorScheme.primary,
+                    showCheckmark: false,
+
+                    // --- 2. MAKE IT ROUNDED (Pill Shape) ---
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20), // Adjust this number for more/less roundness
+                    ),
+                    labelStyle: TextStyle(
+                      color: isSelected ? colorScheme.onPrimary : colorScheme.onSurface,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    side: BorderSide(color: isSelected ? Colors.transparent : colorScheme.primary.withAlpha(50)),
+                  ),
+                );
+              },
+            ),
           ),
-        ),
-      ],),
+
+          const SizedBox(height: 8),
+          QuillSimpleToolbar(
+            controller: _controller,
+            config: const QuillSimpleToolbarConfig(showFontFamily: false, showFontSize: false, multiRowsDisplay: false),
+          ),
+          const Divider(height: 1),
+
+          Expanded(
+            child: QuillEditor(
+              focusNode: _editorFocusNode,
+              scrollController: _editorScrollController, // THE FIX: Pass the required argument
+              controller: _controller,
+              config: QuillEditorConfig(
+                padding: const EdgeInsets.all(16),
+                expands: true,
+                autoFocus: false,
+                embedBuilders: FlutterQuillEmbeds.editorBuilders(),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

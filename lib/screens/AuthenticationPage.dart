@@ -10,18 +10,56 @@ class AuthenticationPage extends StatefulWidget{
 }
 
 
-class AuthenticationPageState extends State<AuthenticationPage>{
+class AuthenticationPageState extends State<AuthenticationPage> {
+  IconData authIcon = Icons.lock_outline;
+  final AuthenticationServices _authService = AuthenticationServices();
 
   @override
   void initState() {
     super.initState();
+    _prepareAuth();
+  }
+
+  void _prepareAuth() async {
+    // 1. Check if device has security
+    bool secure = await _authService.isDeviceSecure();
+
+    if (!secure) {
+      if (mounted) {
+        _showNoSecurityDialog();
+      }
+      return;
+    }
+
+    // 2. Set the correct icon
+    IconData icon = await _authService.getBestIcon();
+    setState(() => authIcon = icon);
+
+    // 3. Trigger auto-auth
     biometric();
   }
 
-  void biometric() async{
-    bool check = await AuthenticationServices().authenticateLocally();
-    if(check){
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=> HomePage()));
+  void _showNoSecurityDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text("Security Required"),
+        content: const Text("Please set a PIN, Pattern, or Fingerprint in your device settings to use this feature."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          )
+        ],
+      ),
+    );
+  }
+
+  void biometric() async {
+    bool check = await _authService.authenticateLocally();
+    if (check && mounted) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomePage()));
     }
   }
 
@@ -29,11 +67,18 @@ class AuthenticationPageState extends State<AuthenticationPage>{
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: IconButton(onPressed: (){
-          biometric();
-        }, icon: Icon(Icons.fingerprint, size: 60,)),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              onPressed: biometric,
+              icon: Icon(authIcon, size: 80, color: Theme.of(context).colorScheme.primary),
+            ),
+            const SizedBox(height: 16),
+            const Text("Tap to Unlock", style: TextStyle(fontWeight: FontWeight.w500)),
+          ],
+        ),
       ),
     );
   }
-
 }
