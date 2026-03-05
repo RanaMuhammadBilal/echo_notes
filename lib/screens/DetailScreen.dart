@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:echo_notes/screens/EditNote.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
@@ -6,11 +7,16 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:provider/provider.dart';
+
+import '../provider_notes.dart';
 
 class DetailScreen extends StatefulWidget {
+  final dynamic index;
   final String titleNote, contentNote, timestamp;
   const DetailScreen({
     super.key,
+    required this.index,
     required this.titleNote,
     required this.contentNote,
     required this.timestamp
@@ -186,26 +192,30 @@ class _DetailScreenState extends State<DetailScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    bool _showBorder = context.watch<NotesProvider>().showNoteBorder;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Note Detail', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Notes', style: TextStyle(fontWeight: FontWeight.bold)),
         scrolledUnderElevation: 0,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         actions: [
-          // --- NEW: Statistics Icon ---
+          // --- 1. PRIMARY ACTION: EDIT ---
           IconButton(
-            onPressed: _showStatistics,
-            icon: Icon(Icons.info_outline_rounded, color: colorScheme.primary),
-            tooltip: "Note Insights",
+            onPressed: (){
+              Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context)=> EditNote(index: widget.index, title: widget.titleNote, content: widget.contentNote))
+              );
+            },
+            icon: Icon(Icons.edit_outlined, color: colorScheme.primary),
+            tooltip: "Edit Note",
           ),
-          IconButton(
-            onPressed: _exportToPdf,
-            icon: Icon(Icons.picture_as_pdf_outlined, color: colorScheme.primary),
-          ),
+
+          // --- 2. PRIMARY ACTION: SPEAK ---
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.only(right: 0),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
@@ -215,11 +225,72 @@ class _DetailScreenState extends State<DetailScreen> {
                 borderRadius: BorderRadius.circular(50),
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
-                  child: Icon(_isSpeaking ? Icons.volume_up_rounded : Icons.record_voice_over, color: colorScheme.primary),
+                  child: Icon(
+                      _isSpeaking ? Icons.volume_up_rounded : Icons.record_voice_over,
+                      color: colorScheme.primary
+                  ),
                 ),
               ),
             ),
           ),
+
+          // --- 3. SECONDARY ACTIONS: 3-DOT MENU ---
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert_rounded, color: colorScheme.primary),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            color: colorScheme.surface,
+            onSelected: (value) {
+              if (value == 'stats') {
+                _showStatistics();
+              } else if (value == 'pdf') {
+                _exportToPdf();
+              } else if (value == 'border') {
+                context.read<NotesProvider>().toggleNoteBorder();
+              }
+            },
+            itemBuilder: (BuildContext context) {
+              // Read the current state to show the correct border icon/text
+              final isBorderEnabled = context.read<NotesProvider>().showNoteBorder;
+
+              return [
+                PopupMenuItem(
+                  value: 'stats',
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, color: colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 12),
+                      const Text('Note Insights'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'pdf',
+                  child: Row(
+                    children: [
+                      Icon(Icons.picture_as_pdf_outlined, color: colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 12),
+                      const Text('Export to PDF'),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'border',
+                  child: Row(
+                    children: [
+                      Icon(
+                          isBorderEnabled ? Icons.border_outer : Icons.border_clear,
+                          color: colorScheme.onSurfaceVariant
+                      ),
+                      const SizedBox(width: 12),
+                      Text(isBorderEnabled ? 'Hide Border' : 'Show Border'),
+                    ],
+                  ),
+                ),
+              ];
+            },
+          ),
+          const SizedBox(width: 4), // Tiny padding at the edge of the screen
         ],
       ),
       body: Column(
@@ -242,17 +313,42 @@ class _DetailScreenState extends State<DetailScreen> {
               ],
             ),
           ),
-          const Divider(height: 1, indent: 20, endIndent: 20),
+          _showBorder ? SizedBox.shrink() : const Divider(height: 1, indent: 20, endIndent: 20),
           Expanded(
-            child: QuillEditor.basic(
-              controller: _controller,
-              config: QuillEditorConfig(
-                autoFocus: false,
-                expands: true,
-                padding: const EdgeInsets.all(20),
-                showCursor: false,
-                enableInteractiveSelection: true,
-                embedBuilders: FlutterQuillEmbeds.editorBuilders(),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Container(
+                width: double.infinity,
+                decoration: _showBorder
+                    ? BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(15),
+                      blurRadius: 6,
+                      offset: const Offset(0, 3),
+                    )
+                  ],
+                )
+                    : null,
+                padding: const EdgeInsets.all(10),
+                // ✅ FIX: Only use hardEdge if the border is actually showing
+                clipBehavior: _showBorder
+                    ? Clip.hardEdge
+                    : Clip.none,
+                child: QuillEditor.basic(
+                  controller: _controller,
+                  config: QuillEditorConfig(
+                    autoFocus: false,
+                    expands: true,
+                    padding: const EdgeInsets.all(8),
+                    showCursor: false,
+                    enableInteractiveSelection: true,
+                    embedBuilders: FlutterQuillEmbeds.editorBuilders(),
+                  ),
+                ),
               ),
             ),
           ),

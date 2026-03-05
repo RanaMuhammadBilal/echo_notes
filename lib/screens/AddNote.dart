@@ -116,15 +116,11 @@ class _AddNoteState extends State<AddNote> {
         title: const Text('New Note', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
-            onPressed: () {
-              // Calls the logic in your NotesProvider to toggle and save to Hive
-              context.read<NotesProvider>().toggleNoteBorder();
-            },
+            onPressed: () => context.read<NotesProvider>().toggleNoteBorder(),
             icon: Icon(
-              // Listens to the current state to show the correct icon
               context.watch<NotesProvider>().showNoteBorder
-                  ? Icons.border_clear
-                  : Icons.border_outer,
+                  ? Icons.border_outer
+                  : Icons.border_clear,
             ),
             color: colorScheme.primary,
             tooltip: context.watch<NotesProvider>().showNoteBorder
@@ -134,140 +130,145 @@ class _AddNoteState extends State<AddNote> {
           IconButton(
             onPressed: _performOCR,
             icon: Icon(Icons.document_scanner_outlined, color: colorScheme.primary),
+            tooltip: 'Scan Text from Image',
           ),
           IconButton(
             onPressed: _saveNote,
             icon: Icon(Icons.check, size: 28, color: colorScheme.primary),
+            tooltip: 'Save Note',
           ),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: IntrinsicHeight(
-                child: Column(
-                  children: [
-                    // --- TITLE FIELD ---
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: TextField(
-                        controller: _titleController,
-                        focusNode: _titleFocusNode,
-                        style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-                        decoration: InputDecoration(
-                          hintText: 'Title',
-                          hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withAlpha(100)),
-                          border: InputBorder.none,
-                        ),
-                        textInputAction: TextInputAction.next,
-                        onSubmitted: (_) => _editorFocusNode.requestFocus(),
+      // --- THE FIX: CustomScrollView handles complex scrolling perfectly in Release Mode ---
+      body: CustomScrollView(
+        slivers: [
+          // 1. TITLE FIELD
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _titleController,
+                focusNode: _titleFocusNode,
+                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                decoration: InputDecoration(
+                  hintText: 'Title',
+                  hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withAlpha(100)),
+                  border: InputBorder.none,
+                ),
+                textInputAction: TextInputAction.next,
+                onSubmitted: (_) => _editorFocusNode.requestFocus(),
+              ),
+            ),
+          ),
+
+          // 2. CATEGORY LIST
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 50,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: dynamicCategories.length,
+                itemBuilder: (context, index) {
+                  final category = dynamicCategories[index];
+                  bool isSelected = _selectedCategory == category;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(category),
+                      selected: isSelected,
+                      onSelected: (val) => setState(() => _selectedCategory = category),
+                      selectedColor: colorScheme.primary,
+                      showCheckmark: false,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      labelStyle: TextStyle(
+                        color: isSelected ? colorScheme.onPrimary : colorScheme.onSurface,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
+                  );
+                },
+              ),
+            ),
+          ),
 
-                    // --- CATEGORY LIST ---
-                    SizedBox(
-                      height: 50,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: dynamicCategories.length,
-                        itemBuilder: (context, index) {
-                          final category = dynamicCategories[index];
-                          bool isSelected = _selectedCategory == category;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: Text(category),
-                              selected: isSelected,
-                              onSelected: (val) => setState(() => _selectedCategory = category),
-                              selectedColor: colorScheme.primary,
-                              showCheckmark: false,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                              labelStyle: TextStyle(
-                                color: isSelected ? colorScheme.onPrimary : colorScheme.onSurface,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
-                    const SizedBox(height: 8),
+          // 3. TOOLBAR
+          SliverToBoxAdapter(
+            child: QuillSimpleToolbar(
+              controller: _controller,
+              config: QuillSimpleToolbarConfig(
+                embedButtons: FlutterQuillEmbeds.toolbarButtons(
+                  imageButtonOptions: const QuillToolbarImageButtonOptions(),
+                  videoButtonOptions: null,
+                ),
+                showFontFamily: true,
+                showFontSize: true,
+                multiRowsDisplay: false,
+              ),
+            ),
+          ),
 
-                    // --- TOOLBAR ---
-                    QuillSimpleToolbar(
-                      controller: _controller,
-                      config: QuillSimpleToolbarConfig(
-                        embedButtons: FlutterQuillEmbeds.toolbarButtons(
-                          imageButtonOptions: const QuillToolbarImageButtonOptions(),
-                          videoButtonOptions: null,
-                        ),
-                        showFontFamily: true,
-                        showFontSize: true,
-                        multiRowsDisplay: false,
-                      ),
-                    ),
+          const SliverToBoxAdapter(child: Divider(height: 1)),
 
-                    const Divider(height: 1),
-
-                    // --- EDITOR AREA (FILLS REST OF SCREEN) ---
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Container(
-                          width: double.infinity,
-                          decoration: _showBorder
-                              ? BoxDecoration(
-                            color: colorScheme.surface,
-                            border: Border.all(color: colorScheme.outlineVariant),
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withAlpha(15),
-                                blurRadius: 6,
-                                offset: const Offset(0, 3),
-                              )
-                            ],
-                          )
-                              : null,
-                          padding: const EdgeInsets.all(10),
-                          child: QuillEditor(
-                            focusNode: _editorFocusNode,
-                            scrollController: _editorScrollController,
-                            controller: _controller,
-                            config: QuillEditorConfig(
-                              placeholder: 'Start typing...',
-                                customStyles: DefaultStyles(
-                                  placeHolder: DefaultTextBlockStyle(
-                                    TextStyle(
-                                      fontSize: 18, // Set your font size here
-                                      color: Colors.grey.withAlpha(150),
-                                    ),
-                                    const HorizontalSpacing(0, 0), // Argument 2: Horizontal spacing
-                                    const VerticalSpacing(0, 0),   // Argument 3: Vertical spacing
-                                    const VerticalSpacing(0, 0),   // Argument 4: Line spacing
-                                    null,
-
-                                  ),
-                                ),
-                              padding: const EdgeInsets.all(8),
-                              expands: false, // Grow with text
-                              scrollable: false, // Let parent handle scrolling
-                              embedBuilders: FlutterQuillEmbeds.editorBuilders(),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+          // 4. EDITOR AREA (MAGIC HAPPENS HERE)
+          SliverFillRemaining(
+            hasScrollBody: false, // Tells it to stretch to screen, but allows content to grow larger
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Container(
+                width: double.infinity,
+                decoration: _showBorder
+                    ? BoxDecoration(
+                  color: colorScheme.surface,
+                  border: Border.all(color: colorScheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(15),
+                      blurRadius: 6,
+                      offset: const Offset(0, 3),
+                    )
                   ],
+                )
+                    : null,
+                // ✅ FIXED PADDING: Gave the bottom extra space so text doesn't touch the border
+                padding: const EdgeInsets.only(top: 12, left: 12, right: 12, bottom: 40),
+                child: QuillEditor(
+                  focusNode: _editorFocusNode,
+                  scrollController: _editorScrollController,
+                  controller: _controller,
+                  config: QuillEditorConfig(
+                    placeholder: 'Start typing...',
+                    customStyles: DefaultStyles(
+                      placeHolder: DefaultTextBlockStyle(
+                        TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey.withAlpha(150),
+                        ),
+                        const HorizontalSpacing(0, 0),
+                        const VerticalSpacing(0, 0),
+                        const VerticalSpacing(0, 0),
+                        null,
+                      ),
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    expands: false, // Must be false so it calculates text height
+                    scrollable: false, // Must be false so CustomScrollView handles the scroll
+                    embedBuilders: FlutterQuillEmbeds.editorBuilders(),
+                  ),
                 ),
               ),
             ),
-          );
-        },
+          ),
+
+          // 5. EXTERNAL BOTTOM PADDING
+          // ✅ FIXED: Pushes the whole container up slightly when scrolling to the very bottom
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 40),
+          ),
+        ],
       ),
     );
   }

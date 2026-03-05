@@ -361,7 +361,7 @@ class _HomePageState extends State<HomePage> {
                         openBuilder: (context, _) => DetailScreen(
                           titleNote: note['title'],
                           contentNote: note['content'],
-                          timestamp: note['timestamp'],
+                          timestamp: note['timestamp'], index: noteKey,
                         ),
                       ),
                     );

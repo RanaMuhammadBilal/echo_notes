@@ -114,13 +114,42 @@ class _EditNoteState extends State<EditNote> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final dynamicCategories = context.watch<NotesProvider>().categories;
+    bool _showBorder = context.watch<NotesProvider>().showNoteBorder;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit Note', style: TextStyle(fontWeight: FontWeight.bold)),
+        scrolledUnderElevation: 0,
+        // ✅ This prevents the color change/splash effect on scroll
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         actions: [
-          IconButton(onPressed: _performOCR, icon: Icon(Icons.document_scanner_outlined, color: colorScheme.primary)),
-          IconButton(onPressed: _updateNote, icon: Icon(Icons.save_as_rounded, size: 28,color: colorScheme.primary)),
+          IconButton(
+            onPressed: () => context.read<NotesProvider>().toggleNoteBorder(),
+            icon: Icon(
+              context.watch<NotesProvider>().showNoteBorder
+                  ? Icons.border_outer
+                  : Icons.border_clear,
+            ),
+            color: colorScheme.primary,
+            tooltip: context.watch<NotesProvider>().showNoteBorder
+                ? 'Remove Border'
+                : 'Show Border',
+          ),
+
+          // 2. OCR SCANNER
+          IconButton(
+            onPressed: _performOCR,
+            icon: Icon(Icons.document_scanner_outlined, color: colorScheme.primary),
+            tooltip: 'Scan Text from Image', // ✅ Added Tooltip
+          ),
+
+          // 3. SAVE BUTTON
+          IconButton(
+            onPressed: _updateNote,
+            icon: Icon(Icons.save_as_rounded, size: 28, color: colorScheme.primary),
+            tooltip: 'Save Changes', // ✅ Added Tooltip
+          ),
         ],
       ),
       body: Column(
@@ -176,15 +205,40 @@ class _EditNoteState extends State<EditNote> {
           const Divider(height: 1),
 
           Expanded(
-            child: QuillEditor(
-              focusNode: _editorFocusNode,
-              scrollController: _editorScrollController, // THE FIX: Pass the required argument
-              controller: _controller,
-              config: QuillEditorConfig(
-                padding: const EdgeInsets.all(16),
-                expands: true,
-                autoFocus: false,
-                embedBuilders: FlutterQuillEmbeds.editorBuilders(),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Container(
+                width: double.infinity,
+                decoration: _showBorder
+                    ? BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(15),
+                      blurRadius: 6,
+                      offset: const Offset(0, 3),
+                    )
+                  ],
+                )
+                    : null,
+                padding: const EdgeInsets.all(10), // Padding between border and editor
+                clipBehavior: _showBorder
+                    ? Clip.hardEdge
+                    : Clip.none, // Required to prevent Flutter crash when decoration is null
+                child: QuillEditor(
+                  focusNode: _editorFocusNode,
+                  scrollController: _editorScrollController,
+                  controller: _controller,
+                  config: QuillEditorConfig(
+                    // Reduced padding slightly so it doesn't double-stack with the container padding
+                    padding: const EdgeInsets.all(8),
+                    expands: true,
+                    autoFocus: false,
+                    embedBuilders: FlutterQuillEmbeds.editorBuilders(),
+                  ),
+                ),
               ),
             ),
           ),
