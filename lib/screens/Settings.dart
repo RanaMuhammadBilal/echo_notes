@@ -110,7 +110,7 @@ class SettingsState extends State<Settings> {
                       // (or they aren't set), block the toggle.
                       if (biometrics.isEmpty && !isSupported) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("No security set! Please add a PIN or Fingerprint in Settings.")),
+                          const SnackBar(content: Text("No security set! Please add a PIN or Fingerprint in Device Settings.")),
                         );
                         return;
                       }
