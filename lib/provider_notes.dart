@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 class NotesProvider extends ChangeNotifier {
@@ -91,6 +92,7 @@ class NotesProvider extends ChangeNotifier {
     note['isPinned'] = false; // Unpin when moved to trash
     note['deletedAt'] = DateTime.now().toIso8601String(); // Record exact time of deletion
     _box.put(key, note);
+    HapticFeedback.heavyImpact();
     loadNotes();
   }
 
@@ -151,6 +153,7 @@ class NotesProvider extends ChangeNotifier {
     final note = Map<String, dynamic>.from(_box.get(key) as Map);
     note['isPinned'] = !(note['isPinned'] ?? false);
     _box.put(key, note);
+    HapticFeedback.mediumImpact();
     loadNotes();
   }
 
@@ -204,6 +207,7 @@ class NotesProvider extends ChangeNotifier {
     _showNoteBorder = !_showNoteBorder;
     // Save the new value to Hive immediately
     _settingsBox.put('showNoteBorder', _showNoteBorder);
+    HapticFeedback.lightImpact();
     notifyListeners();
   }
 

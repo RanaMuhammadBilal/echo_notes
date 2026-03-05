@@ -1,6 +1,7 @@
 import 'package:echo_notes/AuthenticationProvider.dart';
 import 'package:echo_notes/ThemeProvider.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 import 'package:local_auth_platform_interface/local_auth_platform_interface.dart';
@@ -97,6 +98,7 @@ class SettingsState extends State<Settings> {
                   secondary: Icon(Icons.fingerprint_rounded, color: colorScheme.primary),
                   value: authProvider.getAuthenticationValue(),
                   onChanged: (value) async {
+                    HapticFeedback.mediumImpact();
                     if (value == true) {
                       final auth = AuthenticationServices();
 
@@ -130,6 +132,7 @@ class SettingsState extends State<Settings> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             child: ListTile(
               onTap: () {
+                HapticFeedback.selectionClick();
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const TrashScreen()),
@@ -180,7 +183,10 @@ class SettingsState extends State<Settings> {
     final isSelected = provider.currentThemeName == themeKey;
 
     return GestureDetector(
-      onTap: () => provider.saveTheme(themeKey),
+      onTap: () {
+        HapticFeedback.lightImpact();
+        provider.saveTheme(themeKey);
+        },
       child: Column(
         children: [
           AnimatedContainer(
