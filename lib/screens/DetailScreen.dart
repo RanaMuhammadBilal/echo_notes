@@ -30,22 +30,94 @@ class _DetailScreenState extends State<DetailScreen> {
   final FlutterTts flutterTts = FlutterTts();
   late QuillController _controller;
   final GlobalKey _menuKey = GlobalKey();
+  final FocusNode _editorFocusNode = FocusNode();
+  final ScrollController _pageScrollController = ScrollController();
 
   double _currentSpeed = 0.5;
   bool _isSpeaking = false;
+  bool _isPaused = false;
+
+  // Tracking offsets for precise highlighting
+  int _lastOffset = 0;
+  int _lastEndOffset = 0;    // ✅ Remembers the end of the word
+  int _globalOffset = 0;
 
   @override
   void initState() {
     super.initState();
-    _setupQuillController();
     _initTtsHandlers();
+    _setupQuillController();
   }
 
   void _initTtsHandlers() {
-    flutterTts.setStartHandler(() => setState(() => _isSpeaking = true));
-    flutterTts.setCompletionHandler(() => setState(() => _isSpeaking = false));
-    flutterTts.setErrorHandler((msg) => setState(() => _isSpeaking = false));
-    flutterTts.setCancelHandler(() => setState(() => _isSpeaking = false));
+    flutterTts.setLanguage("en-US");
+
+    flutterTts.setStartHandler(() {
+      setState(() {
+        _isSpeaking = true;
+        _isPaused = false;
+      });
+    });
+
+    flutterTts.setCompletionHandler(() {
+      _resetTtsUI();
+    });
+
+    flutterTts.setPauseHandler(() {
+      setState(() {
+        _isSpeaking = false;
+        _isPaused = true;
+      });
+      // ✅ Keep the word highlighted even while paused
+      _controller.updateSelection(
+        TextSelection(baseOffset: _lastOffset, extentOffset: _lastEndOffset),
+        ChangeSource.local,
+      );
+    });
+
+    flutterTts.setContinueHandler(() {
+      setState(() {
+        _isSpeaking = true;
+        _isPaused = false;
+      });
+    });
+
+    flutterTts.setErrorHandler((msg) => _resetTtsUI());
+
+    flutterTts.setCancelHandler(() {
+      // Manual stops are handled by _stopTts, so we ignore system cancels
+    });
+
+    flutterTts.setProgressHandler((String text, int start, int end, String word) {
+      if (_isSpeaking) {
+        int absoluteStart = _globalOffset + start;
+        int absoluteEnd = _globalOffset + end;
+
+        _lastOffset = absoluteStart;
+        _lastEndOffset = absoluteEnd; // ✅ Store the end position
+
+        setState(() {
+          _controller.updateSelection(
+            TextSelection(baseOffset: absoluteStart, extentOffset: absoluteEnd),
+            ChangeSource.local,
+          );
+        });
+      }
+    });
+  }
+
+  void _resetTtsUI() {
+    setState(() {
+      _isSpeaking = false;
+      _isPaused = false;
+      _lastOffset = 0;
+      _lastEndOffset = 0;
+      _globalOffset = 0;
+      _controller.updateSelection(
+        const TextSelection.collapsed(offset: 0),
+        ChangeSource.local,
+      );
+    });
   }
 
   void _setupQuillController() {
@@ -65,12 +137,71 @@ class _DetailScreenState extends State<DetailScreen> {
     }
   }
 
-  // --- NEW: Statistics Logic ---
+  // --- TTS ACTIONS ---
+
+  void _handleSpeakTap() async {
+    String plainText = _controller.document.toPlainText().trim();
+    if (plainText.isEmpty) return;
+
+    // Keep the editor focused so the highlight is visible
+    _editorFocusNode.requestFocus();
+
+    if (_isSpeaking) {
+      await flutterTts.pause();
+    } else {
+      await flutterTts.setSpeechRate(_currentSpeed);
+      await flutterTts.setVolume(1.0);
+      await flutterTts.setPitch(1.0);
+
+      if (_isPaused && _lastOffset > 0 && _lastOffset < plainText.length) {
+        _globalOffset = _lastOffset;
+        String remainingText = plainText.substring(_lastOffset);
+        await flutterTts.speak(remainingText);
+      } else {
+        _globalOffset = 0;
+        _lastOffset = 0;
+        await flutterTts.speak(plainText);
+      }
+    }
+  }
+
+  void _stopTts() async {
+    await flutterTts.stop();
+    _resetTtsUI();
+  }
+
+  void _showSpeedMenu() async {
+    final colorScheme = Theme.of(context).colorScheme;
+    final RenderBox renderBox = _menuKey.currentContext?.findRenderObject() as RenderBox;
+    final Offset offset = renderBox.localToGlobal(Offset.zero);
+    final RelativeRect position = RelativeRect.fromLTRB(
+        offset.dx, offset.dy + renderBox.size.height, offset.dx + renderBox.size.width, 0);
+
+    final double? selected = await showMenu<double>(
+      context: context,
+      position: position,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: colorScheme.surface,
+      items: [
+        _buildSpeedItem(0.25, "0.5x"),
+        _buildSpeedItem(0.5, "1.0x (Normal)"),
+        _buildSpeedItem(0.75, "1.5x"),
+        _buildSpeedItem(1.0, "2.0x (Fast)"),
+      ],
+    );
+
+    if (selected != null) {
+      setState(() => _currentSpeed = selected);
+    }
+  }
+
+  // --- Utility Logic (Stats/PDF) ---
+
   void _showStatistics() {
     final String text = _controller.document.toPlainText();
     final int characters = text.length;
     final int words = text.isEmpty ? 0 : text.trim().split(RegExp(r'\s+')).length;
-    final int readTime = (words / 200).ceil(); // Average reading speed is 200 wpm
+    final int readTime = (words / 200).ceil();
 
     showModalBottomSheet(
       context: context,
@@ -139,53 +270,11 @@ class _DetailScreenState extends State<DetailScreen> {
     );
   }
 
-  void _speak() async {
-    String plainText = _controller.document.toPlainText();
-    await flutterTts.setSpeechRate(_currentSpeed);
-    await flutterTts.speak(plainText);
-  }
-
-  void _showSpeedMenu() async {
-    final RenderBox renderBox = _menuKey.currentContext?.findRenderObject() as RenderBox;
-    final Offset offset = renderBox.localToGlobal(Offset.zero);
-    final RelativeRect position = RelativeRect.fromLTRB(offset.dx, offset.dy + renderBox.size.height, offset.dx + renderBox.size.width, 0);
-
-    final double? selected = await showMenu<double>(
-      context: context,
-      position: position,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      items: [
-        _buildSpeedItem(0.25, "0.5x"),
-        _buildSpeedItem(0.5, "1.0x (Normal)"),
-        _buildSpeedItem(0.75, "1.5x"),
-        _buildSpeedItem(1.0, "2.0x (Fast)"),
-        if (_isSpeaking) ...[
-          const PopupMenuDivider(),
-          PopupMenuItem(
-            onTap: () => flutterTts.stop(),
-            child: const Row(
-              children: [
-                Icon(Icons.stop_circle_outlined, color: Colors.red, size: 20),
-                SizedBox(width: 10),
-                Text("Stop", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ]
-      ],
-    );
-
-    if (selected != null) {
-      setState(() => _currentSpeed = selected);
-      flutterTts.stop();
-      _speak();
-    }
-  }
-
   @override
   void dispose() {
     _controller.dispose();
     flutterTts.stop();
+    _editorFocusNode.dispose();
     super.dispose();
   }
 
@@ -201,128 +290,138 @@ class _DetailScreenState extends State<DetailScreen> {
         scrolledUnderElevation: 0,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         actions: [
-          // --- 1. PRIMARY ACTION: EDIT ---
           IconButton(
-            onPressed: (){
+            onPressed: () {
               Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (context)=> EditNote(index: widget.index, title: widget.titleNote, content: widget.contentNote))
+                  MaterialPageRoute(builder: (context) => EditNote(index: widget.index, title: widget.titleNote, content: widget.contentNote))
               );
             },
             icon: Icon(Icons.edit_outlined, color: colorScheme.primary),
-            tooltip: "Edit Note",
           ),
 
-          // --- 2. PRIMARY ACTION: SPEAK ---
-          Padding(
-            padding: const EdgeInsets.only(right: 0),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                key: _menuKey,
-                onTap: _speak,
-                onLongPress: _showSpeedMenu,
-                borderRadius: BorderRadius.circular(50),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Icon(
-                      _isSpeaking ? Icons.volume_up_rounded : Icons.record_voice_over,
-                      color: colorScheme.primary
-                  ),
-                ),
-              ),
+          // ✅ PLAY / PAUSE
+          IconButton(
+            key: _menuKey,
+            onPressed: _handleSpeakTap,
+            onLongPress: _showSpeedMenu,
+            icon: Icon(
+              _isSpeaking ? Icons.pause_circle_filled : (_isPaused ? Icons.play_circle_fill : Icons.record_voice_over),
+              color: colorScheme.primary,
             ),
           ),
 
-          // --- 3. SECONDARY ACTIONS: 3-DOT MENU ---
+          // ✅ STOP
+          if (_isSpeaking || _isPaused)
+            IconButton(
+              onPressed: _stopTts,
+              icon: const Icon(Icons.stop_circle_outlined, color: Colors.red),
+            ),
+
           PopupMenuButton<String>(
+            color: colorScheme.surface,
+            tooltip: "More Options",
             icon: Icon(Icons.more_vert_rounded, color: colorScheme.primary),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            color: colorScheme.surface,
             onSelected: (value) {
-              if (value == 'stats') {
-                _showStatistics();
-              } else if (value == 'pdf') {
-                _exportToPdf();
-              } else if (value == 'border') {
-                context.read<NotesProvider>().toggleNoteBorder();
-              }
+              if (value == 'stats') _showStatistics();
+              else if (value == 'pdf') _exportToPdf();
+              else if (value == 'border') context.read<NotesProvider>().toggleNoteBorder();
             },
             itemBuilder: (BuildContext context) {
-              // Read the current state to show the correct border icon/text
-              final isBorderEnabled = context.read<NotesProvider>().showNoteBorder;
-
               return [
+                // 1. NOTE INSIGHTS
                 PopupMenuItem(
                   value: 'stats',
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline_rounded, color: colorScheme.onSurfaceVariant),
+                      Icon(Icons.bar_chart_rounded, color: colorScheme.onSurfaceVariant, size: 20),
                       const SizedBox(width: 12),
                       const Text('Note Insights'),
                     ],
                   ),
                 ),
+
+                // 2. EXPORT TO PDF
                 PopupMenuItem(
                   value: 'pdf',
                   child: Row(
                     children: [
-                      Icon(Icons.picture_as_pdf_outlined, color: colorScheme.onSurfaceVariant),
+                      Icon(Icons.picture_as_pdf_outlined, color: colorScheme.onSurfaceVariant, size: 20),
                       const SizedBox(width: 12),
                       const Text('Export to PDF'),
                     ],
                   ),
                 ),
-                const PopupMenuDivider(),
+
+                const PopupMenuDivider(), // Optional: adds a thin line for visual separation
+
+                // 3. TOGGLE BORDER
                 PopupMenuItem(
                   value: 'border',
                   child: Row(
                     children: [
                       Icon(
-                          isBorderEnabled ? Icons.border_outer : Icons.border_clear,
-                          color: colorScheme.onSurfaceVariant
+                        _showBorder ? Icons.border_clear : Icons.border_outer,
+                        color: colorScheme.onSurfaceVariant,
+                        size: 20,
                       ),
                       const SizedBox(width: 12),
-                      Text(isBorderEnabled ? 'Hide Border' : 'Show Border'),
+                      Text(_showBorder ? 'Hide Border' : 'Show Border'),
                     ],
                   ),
                 ),
               ];
             },
           ),
-          const SizedBox(width: 4), // Tiny padding at the edge of the screen
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-            child: SelectableText(
-              widget.titleNote,
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colorScheme.onSurface, letterSpacing: -0.5),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-            child: Row(
+      body: CustomScrollView(
+        controller: _pageScrollController,
+        slivers: [
+          // 1. TITLE & TIMESTAMP
+          SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.access_time_rounded, size: 14, color: colorScheme.onSurfaceVariant),
-                const SizedBox(width: 6),
-                Text(widget.timestamp, style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                  child: SelectableText(
+                    widget.titleNote,
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colorScheme.onSurface, letterSpacing: -0.5),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                  child: Row(
+                    children: [
+                      Icon(Icons.access_time_rounded, size: 14, color: colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 6),
+                      Text(widget.timestamp, style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-          _showBorder ? SizedBox.shrink() : const Divider(height: 1, indent: 20, endIndent: 20),
-          Expanded(
+
+          // 2. DIVIDER
+           SliverToBoxAdapter(
+            child: _showBorder ? SizedBox.shrink() : Divider(height: 1, indent: 20, endIndent: 20),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+          // 3. EDITOR AREA
+          SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Container(
                 width: double.infinity,
                 decoration: _showBorder
                     ? BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                  color: colorScheme.surface,
+                  border: Border.all(color: colorScheme.outlineVariant),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
@@ -333,24 +432,42 @@ class _DetailScreenState extends State<DetailScreen> {
                   ],
                 )
                     : null,
-                padding: const EdgeInsets.all(10),
-                // ✅ FIX: Only use hardEdge if the border is actually showing
-                clipBehavior: _showBorder
-                    ? Clip.hardEdge
-                    : Clip.none,
-                child: QuillEditor.basic(
-                  controller: _controller,
-                  config: QuillEditorConfig(
-                    autoFocus: false,
-                    expands: true,
-                    padding: const EdgeInsets.all(8),
-                    showCursor: false,
-                    enableInteractiveSelection: true,
-                    embedBuilders: FlutterQuillEmbeds.editorBuilders(),
+                clipBehavior: _showBorder ? Clip.hardEdge : Clip.none,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    // Ensures the "page" is always at least 60% of the screen height
+                    minHeight: MediaQuery.of(context).size.height * 0.7,
+                  ),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: QuillEditor.basic(
+                          controller: _controller,
+                          config: QuillEditorConfig(
+                            padding: const EdgeInsets.all(10),
+                            // ✅ THE FIX: Let the page scroll, not the editor
+                            expands: false,
+                            scrollable: false,
+                            autoFocus: false,
+                            showCursor: false,
+                            enableInteractiveSelection: true,
+                            embedBuilders: FlutterQuillEmbeds.editorBuilders(),
+                          ),
+                        ),
+                      ),
+                      // The 25% empty bottom space
+                      /*const SizedBox(height: 100),*/
+                    ],
                   ),
                 ),
               ),
             ),
+          ),
+
+          // 4. BOTTOM BUMPER SPACE
+          SliverToBoxAdapter(
+            child: SizedBox(height: 50),
           ),
         ],
       ),
@@ -361,13 +478,7 @@ class _DetailScreenState extends State<DetailScreen> {
     bool isSelected = _currentSpeed == value;
     return PopupMenuItem(
       value: value,
-      child: Row(
-        children: [
-          Icon(Icons.speed, size: 18, color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey),
-          const SizedBox(width: 12),
-          Text(label, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? Theme.of(context).colorScheme.primary : null)),
-        ],
-      ),
+      child: Text(label, style: TextStyle(color: isSelected ? Colors.blue : null, fontWeight: isSelected ? FontWeight.bold : null)),
     );
   }
 }

@@ -34,6 +34,14 @@ class _EditNoteState extends State<EditNote> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.title);
+    _editorFocusNode.addListener(() {
+      if (_editorFocusNode.hasFocus) {
+        // Small delay to allow the keyboard to start opening
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _scrollToEditor();
+        });
+      }
+    });
 
     // Get existing category from Provider
     final provider = context.read<NotesProvider>();
@@ -48,6 +56,18 @@ class _EditNoteState extends State<EditNote> {
       );
     } catch (e) {
       _controller = QuillController.basic()..document.insert(0, widget.content);
+    }
+  }
+
+
+// ✅ Helper function to handle the scroll
+  void _scrollToEditor() {
+    if (_editorScrollController.hasClients) {
+      _editorScrollController.animateTo(
+        150.0, // This value jumps past the Title and Category chips
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
     }
   }
 
@@ -73,6 +93,7 @@ class _EditNoteState extends State<EditNote> {
     _editorScrollController.dispose(); // Clean up
     super.dispose();
   }
+
 
   // Same OCR logic as AddNote for consistency
   Future<void> _performOCR() async {
@@ -117,6 +138,7 @@ class _EditNoteState extends State<EditNote> {
     bool _showBorder = context.watch<NotesProvider>().showNoteBorder;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Edit Note', style: TextStyle(fontWeight: FontWeight.bold)),
         scrolledUnderElevation: 0,
@@ -152,98 +174,155 @@ class _EditNoteState extends State<EditNote> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              controller: _titleController,
-              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-              decoration: const InputDecoration(hintText: 'Title', border: InputBorder.none),
-            ),
-          ),
-
-          // THEME-ADAPTIVE CATEGORY SELECTOR
-          SizedBox(
-            height: 50,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: dynamicCategories.length,
-              itemBuilder: (context, index) {
-                final category = dynamicCategories[index];
-                bool isSelected = _selectedCategory == category;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(category),
-                    selected: isSelected,
-                    onSelected: (val) => setState(() => _selectedCategory = category),
-                    selectedColor: colorScheme.primary,
-                    showCheckmark: false,
-
-                    // --- 2. MAKE IT ROUNDED (Pill Shape) ---
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20), // Adjust this number for more/less roundness
-                    ),
-                    labelStyle: TextStyle(
-                      color: isSelected ? colorScheme.onPrimary : colorScheme.onSurface,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    ),
-                    side: BorderSide(color: isSelected ? Colors.transparent : colorScheme.primary.withAlpha(50)),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: CustomScrollView(
+          controller: _editorScrollController, // Entire page scrolls
+          slivers: [
+            // 1. TITLE FIELD (Scrolls away)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: TextField(
+                  controller: _titleController,
+                  style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                  decoration: const InputDecoration(
+                      hintText: 'Title',
+                      border: InputBorder.none
                   ),
-                );
-              },
+                  textInputAction: TextInputAction.next,
+                ),
+              ),
             ),
-          ),
 
-          const SizedBox(height: 8),
-          QuillSimpleToolbar(
-            controller: _controller,
-            config: const QuillSimpleToolbarConfig(showFontFamily: false, showFontSize: false, multiRowsDisplay: false),
-          ),
-          const Divider(height: 1),
+            // 2. CATEGORY SELECTOR (Scrolls away)
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 50,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: dynamicCategories.length,
+                  itemBuilder: (context, index) {
+                    final category = dynamicCategories[index];
+                    bool isSelected = _selectedCategory == category;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(category),
+                        selected: isSelected,
+                        onSelected: (val) => setState(() => _selectedCategory = category),
+                        selectedColor: colorScheme.primary,
+                        showCheckmark: false,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        labelStyle: TextStyle(
+                          color: isSelected ? colorScheme.onPrimary : colorScheme.onSurface,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        side: BorderSide(
+                            color: isSelected ? Colors.transparent : colorScheme.primary.withAlpha(50)
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
 
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Container(
-                width: double.infinity,
-                decoration: _showBorder
-                    ? BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(15),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    )
-                  ],
-                )
-                    : null,
-                padding: const EdgeInsets.all(10), // Padding between border and editor
-                clipBehavior: _showBorder
-                    ? Clip.hardEdge
-                    : Clip.none, // Required to prevent Flutter crash when decoration is null
-                child: QuillEditor(
-                  focusNode: _editorFocusNode,
-                  scrollController: _editorScrollController,
-                  controller: _controller,
-                  config: QuillEditorConfig(
-                    // Reduced padding slightly so it doesn't double-stack with the container padding
-                    padding: const EdgeInsets.all(8),
-                    expands: true,
-                    autoFocus: false,
-                    embedBuilders: FlutterQuillEmbeds.editorBuilders(),
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
+
+            // 3. STICKY TOOLBAR (Remains at top after scrolling up)
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _StickyToolbarDelegate(
+                child: Container(
+                  // Matches your scaffold background to hide text scrolling behind it
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  child: Column(
+                    children: [
+                      QuillSimpleToolbar(
+                        controller: _controller,
+                        config: const QuillSimpleToolbarConfig(
+                            showFontFamily: false,
+                            showFontSize: false,
+                            multiRowsDisplay: false
+                        ),
+                      ),
+                      const Divider(height: 1),
+                    ],
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+
+            // 4. EDITOR AREA (Grows with text content)
+            SliverToBoxAdapter(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  // This ensures the "page" is always at least 70% of the screen height
+                  minHeight: MediaQuery.of(context).size.height * 0.6,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Container(
+                    width: double.infinity,
+                    decoration: _showBorder
+                        ? BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(15),
+                          blurRadius: 6,
+                          offset: const Offset(0, 3),
+                        )
+                      ],
+                    )
+                        : null,
+                    padding: const EdgeInsets.all(10),
+                    clipBehavior: _showBorder ? Clip.hardEdge : Clip.none,
+                    child: QuillEditor(
+                      focusNode: _editorFocusNode,
+                      scrollController: _editorScrollController,
+                      controller: _controller,
+                      config: QuillEditorConfig(
+                        padding: const EdgeInsets.all(8),
+                        expands: false,    // Editor height is determined by text
+                        scrollable: false, // Page handles the scroll
+                        autoFocus: false,
+                        embedBuilders: FlutterQuillEmbeds.editorBuilders(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // 5. BOTTOM PADDING (Room for keyboard)
+            const SliverToBoxAdapter(child: SizedBox(height: 50)),
+          ],
+        ),
       ),
     );
   }
+}
+class _StickyToolbarDelegate extends SliverPersistentHeaderDelegate {
+  final Widget child;
+  _StickyToolbarDelegate({required this.child});
+
+  @override
+  double get minExtent => 56.0; // Standard single-row toolbar height
+  @override
+  double get maxExtent => 56.0;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return child;
+  }
+
+  @override
+  bool shouldRebuild(_StickyToolbarDelegate oldDelegate) => false;
 }

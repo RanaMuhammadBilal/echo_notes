@@ -436,7 +436,7 @@ class _HomePageState extends State<HomePage> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.drive_file_move_outlined),
+              leading: const Icon(Icons.drive_file_move),
               title: const Text('Move to Folder'),
               onTap: () {
                 Navigator.pop(context);
@@ -444,7 +444,7 @@ class _HomePageState extends State<HomePage> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.edit_outlined),
+              leading: const Icon(Icons.edit),
               title: const Text('Edit Note'),
               onTap: () {
                 Navigator.pop(context);
@@ -454,8 +454,8 @@ class _HomePageState extends State<HomePage> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.red),
-              title: const Text('Move to Trash', style: TextStyle(color: Colors.red)),
+              leading: const Icon(Icons.delete),
+              title: const Text('Move to Trash',),
               onTap: () {
                 provider.deleteNote(noteKey);
                 Navigator.pop(context);

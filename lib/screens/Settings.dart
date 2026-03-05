@@ -125,27 +125,7 @@ class SettingsState extends State<Settings> {
           ),
           const SizedBox(height: 12),
 
-          // --- RECYCLE BIN SECTION (NEW) ---
-          Card(
-            elevation: 0,
-            color: colorScheme.surfaceContainerHighest.withAlpha(80),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            child: ListTile(
-              onTap: () {
-                HapticFeedback.selectionClick();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const TrashScreen()),
-                );
-              },
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              leading: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent),
-              title: const Text('Recycle Bin', style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Notes are auto-deleted after 30 days'),
-              trailing: Icon(Icons.chevron_right_rounded, color: colorScheme.onSurfaceVariant),
-            ),
-          ),
-          const SizedBox(height: 12),
+
           Consumer<NotesProvider>(
             builder: (context, notesProvider, _) {
               return Card(
@@ -170,7 +150,27 @@ class SettingsState extends State<Settings> {
               );
             },
           ),
-
+          const SizedBox(height: 12),
+          // --- RECYCLE BIN SECTION (NEW) ---
+          Card(
+            elevation: 0,
+            color: colorScheme.surfaceContainerHighest.withAlpha(80),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: ListTile(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const TrashScreen()),
+                );
+              },
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              leading: Icon(Icons.delete_sweep_outlined,color: colorScheme.primary),
+              title: const Text('Recycle Bin', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('Notes are auto-deleted after 30 days'),
+              trailing: Icon(Icons.chevron_right_rounded, color: colorScheme.onSurfaceVariant),
+            ),
+          ),
           const SizedBox(height: 12),
         ],
       ),
