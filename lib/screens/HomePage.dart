@@ -111,6 +111,8 @@ class _HomePageState extends State<HomePage> {
             style: const TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         actions: [
           if (isSelectionMode)
             IconButton(
@@ -127,6 +129,7 @@ class _HomePageState extends State<HomePage> {
             IconButton(
               onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SearchScreen())),
               icon: const Icon(Icons.search),
+
             )
         ],
       ),

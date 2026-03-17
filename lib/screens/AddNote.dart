@@ -56,7 +56,7 @@ class _AddNoteState extends State<AddNote> {
     if (_editorScrollController.hasClients) {
       final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
       _editorScrollController.animateTo(
-        keyboardHeight + 100, // keyboard height + some padding
+        /*keyboardHeight +*/ 100, // keyboard height + some padding
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
