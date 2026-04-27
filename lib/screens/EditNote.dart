@@ -245,9 +245,9 @@ class _EditNoteState extends State<EditNote> {
                       QuillSimpleToolbar(
                         controller: _controller,
                         config: const QuillSimpleToolbarConfig(
-                            showFontFamily: false,
-                            showFontSize: false,
-                            multiRowsDisplay: false
+                            showFontFamily: true,
+                            showFontSize: true,
+                            multiRowsDisplay: false,
                         ),
                       ),
                       const Divider(height: 1),

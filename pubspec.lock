@@ -169,6 +169,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.4.1"
+  dio:
+    dependency: transitive
+    description:
+      name: dio
+      sha256: aff32c08f92787a557dd5c0145ac91536481831a01b4648136373cddb0e64f8c
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.9.2"
+  dio_web_adapter:
+    dependency: transitive
+    description:
+      name: dio_web_adapter
+      sha256: "2f9e64323a7c3c7ef69567d5c800424a11f8337b8b228bad02524c9fb3c1f340"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.2"
+  equatable:
+    dependency: transitive
+    description:
+      name: equatable
+      sha256: "3e0141505477fd8ad55d6eb4e7776d3fe8430be8e497ccb1521370c3f21a3e2b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.8"
   fake_async:
     dependency: transitive
     description:
@@ -323,6 +347,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "11.5.0"
+  flutter_quill_delta_easy_parser:
+    dependency: transitive
+    description:
+      name: flutter_quill_delta_easy_parser
+      sha256: "7bcfec352eba796cb94126f7e3e49cf0bbc51ad490e9c5e7f0dbb09405547cd4"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.8"
   flutter_quill_delta_from_html:
     dependency: transitive
     description:
@@ -339,6 +371,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "11.0.0"
+  flutter_quill_to_pdf:
+    dependency: "direct main"
+    description:
+      name: flutter_quill_to_pdf
+      sha256: "91ed8dc21fee89c9ed25bdcbbb27f8bb24c6ebf32b372103a60d651849f6e15a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.3.9"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -381,6 +421,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.15.1"
+  highlight:
+    dependency: transitive
+    description:
+      name: highlight
+      sha256: "5353a83ffe3e3eca7df0abfb72dcf3fa66cc56b953728e7113ad4ad88497cf21"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.0"
   hive:
     dependency: "direct main"
     description:
@@ -653,6 +701,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
+  numerus:
+    dependency: transitive
+    description:
+      name: numerus
+      sha256: a17a3f34527497e89378696a76f382b40dc534c4a57b3778de246ebc1ce2ca99
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.3.0"
   objective_c:
     dependency: transitive
     description:
