@@ -246,133 +246,189 @@ class _DetailScreenState extends State<DetailScreen> {
   }
 
   Future<void> _exportToPdf() async {
-    final baseFont = await PdfGoogleFonts.openSansRegular();
-    final boldFont = await PdfGoogleFonts.openSansBold();
-    final emojiFont = await PdfGoogleFonts.notoColorEmoji();
-
-    final pdf = pw.Document(
-      theme: pw.ThemeData.withFont(
-        base: baseFont,
-        bold: boldFont,
-      ),
+    // 1. IMMEDIATELY SHOW A LOADING SPINNER
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
-    // 1. Define Styles First
-    final titleStyle = pw.TextStyle(font: boldFont, fontFallback: [emojiFont], fontSize: 24);
-    final timestampStyle = pw.TextStyle(font: baseFont, fontFallback: [emojiFont], fontSize: 11, color: PdfColors.grey700);
-    final bodyStyle = pw.TextStyle(font: baseFont, fontFallback: [emojiFont], fontSize: 13, lineSpacing: 1.5);
+    try {
+      // 2. FETCH ALL FONTS (Now including Italics for rich text!)
+      final fonts = await Future.wait([
+        PdfGoogleFonts.openSansRegular(),
+        PdfGoogleFonts.openSansBold(),
+        PdfGoogleFonts.openSansItalic(),
+        PdfGoogleFonts.openSansBoldItalic(),
+        PdfGoogleFonts.notoColorEmoji(),
+      ]);
 
-    // 2. Prepare the list of widgets that will make up the PDF body
-    List<pw.Widget> pdfContent = [];
-    String textBuffer = "";
+      final baseFont = fonts[0];
+      final boldFont = fonts[1];
+      final italicFont = fonts[2];
+      final boldItalicFont = fonts[3];
+      final emojiFont = fonts[4];
 
-    // Helper function to process accumulated text into paragraphs
-    void flushTextBuffer() {
-      if (textBuffer.trim().isEmpty) {
-        textBuffer = "";
-        return;
-      }
+      final pdf = pw.Document(
+        theme: pw.ThemeData.withFont(
+          base: baseFont,
+          bold: boldFont,
+          italic: italicFont,
+          boldItalic: boldItalicFont,
+        ),
+      );
 
-      final sanitizeRegex = RegExp(r'[\uFE0F\u200D]');
-      String sanitized = textBuffer.replaceAll(sanitizeRegex, '');
-      final paragraphs = sanitized.split('\n');
+      // 3. Define Header Styles
+      final titleStyle = pw.TextStyle(font: boldFont, fontFallback: [emojiFont], fontSize: 24);
+      final timestampStyle = pw.TextStyle(font: baseFont, fontFallback: [emojiFont], fontSize: 11, color: PdfColors.grey700);
 
-      for (var paragraph in paragraphs) {
-        if (paragraph.trim().isEmpty) {
-          pdfContent.add(pw.SizedBox(height: 12));
+      // 4. RICH TEXT PARSER SETUP
+      List<pw.Widget> pdfContent = [];
+      List<pw.TextSpan> currentParagraphSpans = [];
+
+      // Flushes accumulated inline text spans into a solid paragraph
+      void flushParagraph() {
+        if (currentParagraphSpans.isEmpty) {
+          pdfContent.add(pw.SizedBox(height: 12)); // Empty space for pure newlines
         } else {
           pdfContent.add(
             pw.Padding(
               padding: const pw.EdgeInsets.only(bottom: 8),
-              child: pw.Text(paragraph, style: bodyStyle),
-            ),
-          );
-        }
-      }
-      textBuffer = ""; // Reset buffer after printing
-    }
-
-    // 3. READ THE RAW DELTA TO FIND IMAGES
-    final delta = _controller.document.toDelta();
-
-    for (final op in delta.toList()) {
-      if (op.data is String) {
-        // If it's text, add it to our buffer
-        textBuffer += op.data as String;
-      }
-      else if (op.data is Map && (op.data as Map).containsKey('image')) {
-        // We found an image! First, print all the text we've accumulated so far:
-        flushTextBuffer();
-
-        // Now, extract and load the image
-        final String imageSource = (op.data as Map)['image'].toString();
-        Uint8List? imageBytes;
-
-        try {
-          if (imageSource.startsWith('data:image')) {
-            // It's a Base64 image
-            final base64Str = imageSource.split(',').last;
-            imageBytes = base64Decode(base64Str);
-          } else {
-            // It's a local file path
-            final file = File(imageSource);
-            if (file.existsSync()) {
-              imageBytes = file.readAsBytesSync();
-            }
-          }
-        } catch (e) {
-          debugPrint("Failed to load PDF image: $e");
-        }
-
-        // If we successfully loaded the image bytes, add it to the PDF layout
-        if (imageBytes != null) {
-          pdfContent.add(
-            pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(vertical: 16),
-              child: pw.Center(
-                child: pw.Image(
-                  pw.MemoryImage(imageBytes),
-                  fit: pw.BoxFit.contain,
-                ),
+              child: pw.RichText(
+                text: pw.TextSpan(children: List.from(currentParagraphSpans)),
               ),
             ),
           );
+          currentParagraphSpans.clear();
         }
       }
+
+      // Processes text chunks and applies the correct font weight/style
+      void processTextOp(String text, Map<String, dynamic>? attributes) {
+        final sanitizeRegex = RegExp(r'[\uFE0F\u200D]');
+        String sanitized = text.replaceAll(sanitizeRegex, '');
+        final parts = sanitized.split('\n');
+
+        // Check attributes applied to this specific chunk of text
+        bool isBold = attributes?['bold'] == true;
+        bool isItalic = attributes?['italic'] == true;
+
+        // Determine the exact font combination
+        pw.Font targetFont = baseFont;
+        if (isBold && isItalic) {
+          targetFont = boldItalicFont;
+        } else if (isBold) {
+          targetFont = boldFont;
+        } else if (isItalic) {
+          targetFont = italicFont;
+        }
+
+        final style = pw.TextStyle(
+          font: targetFont,
+          fontFallback: [emojiFont],
+          fontSize: 13,
+          lineSpacing: 1.5,
+        );
+
+        // Break text by newlines so paragraphs form naturally
+        for (int i = 0; i < parts.length; i++) {
+          if (parts[i].isNotEmpty) {
+            currentParagraphSpans.add(pw.TextSpan(
+              text: parts[i],
+              style: style,
+            ));
+          }
+          if (i < parts.length - 1) {
+            flushParagraph(); // A newline was found, flush the current paragraph
+          }
+        }
+      }
+
+      // 5. READ DELTA TO FIND FORMATTED TEXT AND IMAGES
+      final delta = _controller.document.toDelta();
+
+      for (final op in delta.toList()) {
+        if (op.data is String) {
+          processTextOp(op.data as String, op.attributes);
+        }
+        else if (op.data is Map && (op.data as Map).containsKey('image')) {
+          flushParagraph(); // Flush any text BEFORE injecting the image
+
+          final String imageSource = (op.data as Map)['image'].toString();
+          Uint8List? imageBytes;
+
+          try {
+            if (imageSource.startsWith('data:image')) {
+              final base64Str = imageSource.split(',').last;
+              imageBytes = base64Decode(base64Str);
+            } else {
+              final file = File(imageSource);
+              if (file.existsSync()) {
+                imageBytes = file.readAsBytesSync();
+              }
+            }
+          } catch (e) {
+            debugPrint("Failed to load PDF image: $e");
+          }
+
+          if (imageBytes != null) {
+            pdfContent.add(
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(vertical: 16),
+                child: pw.Center(
+                  child: pw.Image(
+                    pw.MemoryImage(imageBytes),
+                    fit: pw.BoxFit.contain,
+                  ),
+                ),
+              ),
+            );
+          }
+        }
+      }
+
+      flushParagraph(); // Flush any remaining text at the end of the document
+
+      String rawTitle = widget.titleNote.replaceAll(RegExp(r'[\uFE0F\u200D]'), '');
+      String rawTimestamp = widget.timestamp.replaceAll(RegExp(r'[\uFE0F\u200D]'), '');
+
+      // 6. Build Document
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+          build: (pw.Context context) {
+            return [
+              pw.Text(rawTitle, style: titleStyle),
+              pw.SizedBox(height: 6),
+              pw.Text(rawTimestamp, style: timestampStyle),
+              pw.SizedBox(height: 12),
+              pw.Divider(thickness: 1, color: PdfColors.grey300),
+              pw.SizedBox(height: 24),
+              ...pdfContent,
+            ];
+          },
+        ),
+      );
+
+      // 7. DISMISS LOADING DIALOG BEFORE SHOWING PDF
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdf.save(),
+        name: '${widget.titleNote}.pdf',
+      );
+
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error exporting PDF: $e")),
+        );
+      }
     }
-
-    // Print any leftover text at the very end of the document
-    flushTextBuffer();
-
-    // 4. Sanitize Headers
-    String rawTitle = widget.titleNote.replaceAll(RegExp(r'[\uFE0F\u200D]'), '');
-    String rawTimestamp = widget.timestamp.replaceAll(RegExp(r'[\uFE0F\u200D]'), '');
-
-    // 5. Build Document
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.symmetric(horizontal: 40, vertical: 48),
-        build: (pw.Context context) {
-          return [
-            pw.Text(rawTitle, style: titleStyle),
-            pw.SizedBox(height: 6),
-            pw.Text(rawTimestamp, style: timestampStyle),
-            pw.SizedBox(height: 12),
-            pw.Divider(thickness: 1, color: PdfColors.grey300),
-            pw.SizedBox(height: 24),
-
-            // Unpack all our generated text and image widgets here
-            ...pdfContent,
-          ];
-        },
-      ),
-    );
-
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: '${widget.titleNote}.pdf',
-    );
   }
 
   @override
