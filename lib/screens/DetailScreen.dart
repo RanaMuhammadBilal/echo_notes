@@ -43,7 +43,7 @@ class _DetailScreenState extends State<DetailScreen> {
 
   // Tracking offsets for precise highlighting
   int _lastOffset = 0;
-  int _lastEndOffset = 0;    // ✅ Remembers the end of the word
+  int _lastEndOffset = 0;    //  Remembers the end of the word
   int _globalOffset = 0;
 
   @override

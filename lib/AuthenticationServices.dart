@@ -46,11 +46,9 @@ class AuthenticationServices {
     try {
       isAuthenticated = await localAuthentication.authenticate(
         localizedReason: "Please authenticate to continue",
-        options: const AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly: false, // Set to false to allow PIN/Pattern if fingerprint fails/missing
-          useErrorDialogs: true,
-        ),
+        biometricOnly: false,               // Maps from options.biometricOnly
+        persistAcrossBackgrounding: true,   // Replaces options.stickyAuth
+        sensitiveTransaction: true,         // Default platform security precaution
       );
     } catch (ex) {
       print('Error : $ex');

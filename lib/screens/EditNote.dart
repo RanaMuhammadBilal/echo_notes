@@ -90,7 +90,7 @@ class _EditNoteState extends State<EditNote> {
     _controller.dispose();
     _titleController.dispose();
     _editorFocusNode.dispose();
-    _editorScrollController.dispose(); // Clean up
+    _editorScrollController.dispose();
     super.dispose();
   }
 
