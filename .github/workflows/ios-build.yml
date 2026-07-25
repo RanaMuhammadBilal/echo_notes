@@ -1,7 +1,7 @@
 name: iOS IPA Build
 
 on:
-  workflow_dispatch: # This allows you to run the build manually
+  workflow_dispatch:
 
 jobs:
   build-ios:
@@ -19,6 +19,18 @@ jobs:
 
       - name: Install Dependencies
         run: flutter pub get
+
+      - name: Pre-build & Patch for ML Kit
+        run: |
+          # 1. Generate the iOS scaffolding without compiling
+          flutter build ios --config-only
+          cd ios
+          
+          # 2. Automatically update the global platform to 15.5
+          sed -i '' "s/^# platform :ios, .*/platform :ios, '15.5'/" Podfile
+          
+          # 3. Inject the 15.5 deployment target into the Pod configurations
+          sed -i '' "s/flutter_additional_ios_build_settings(target)/flutter_additional_ios_build_settings(target)\n      target.build_configurations.each do |config|\n        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.5'\n      end/" Podfile
 
       - name: Build iOS (No Codesign)
         run: flutter build ios --release --no-codesign
