@@ -20,16 +20,17 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Pre-build & Patch for ML Kit
+      - name: Generate Podfile & Patch ML Kit
         run: |
-          # 1. Generate the iOS scaffolding without compiling
-          flutter build ios --config-only --no-codesign
+          # 1. Safely generate the missing Podfile WITHOUT triggering CocoaPods
+          flutter create . --platforms=ios
+          
           cd ios
           
-          # 2. Automatically update the global platform to 15.5
+          # 2. Uncomment and force the global platform to iOS 15.5
           sed -i '' "s/^# platform :ios, .*/platform :ios, '15.5'/" Podfile
           
-          # 3. Inject the 15.5 deployment target into the Pod configurations
+          # 3. Inject the 15.5 deployment target into the post-install block
           sed -i '' "s/flutter_additional_ios_build_settings(target)/flutter_additional_ios_build_settings(target)\n      target.build_configurations.each do |config|\n        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.5'\n      end/" Podfile
       - name: Build iOS (No Codesign)
         run: flutter build ios --release --no-codesign
