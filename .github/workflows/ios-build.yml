@@ -1,0 +1,51 @@
+name: iOS IPA Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build iOS Unsigned IPA
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Generate Podfile & Patch ML Kit
+        run: |
+          # 1. Safely generate missing iOS files with explicit org
+          flutter create . --platforms=ios --org com.bildroid
+          
+          cd ios
+          
+          # 2. Uncomment and force the global platform to iOS 15.5
+          sed -i '' "s/^# platform :ios, .*/platform :ios, '15.5'/" Podfile
+          sed -i '' "s/^platform :ios, .*/platform :ios, '15.5'/" Podfile
+          
+          # 3. Inject the 15.5 deployment target into the post-install block
+          sed -i '' "s/flutter_additional_ios_build_settings(target)/flutter_additional_ios_build_settings(target)\n      target.build_configurations.each do |config|\n        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.5'\n      end/" Podfile
+      - name: Build iOS (No Codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package into IPA
+        run: |
+          mkdir -p build/ios/iphoneos/Payload
+          mv build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/
+          cd build/ios/iphoneos
+          zip -qr EchoNotes.ipa Payload
+          
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EchoNotes-iOS-App
+          path: build/ios/iphoneos/EchoNotes.ipa
+          retention-days: 3
