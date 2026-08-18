@@ -68,27 +68,27 @@ class NotificationService {
     required String body,
     required DateTime scheduledDate,
   }) async {
-    await initNotification();
-    await requestPermissions();
-
-    if (scheduledDate.isBefore(DateTime.now())) return;
-
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'echo_notes_reminders',
-      'Note Reminders',
-      channelDescription: 'Notifications for Echo Notes reminders',
-      importance: Importance.max,
-      priority: Priority.high,
-      showWhen: true,
-    );
-
-    const NotificationDetails notificationDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(),
-      macOS: DarwinNotificationDetails(),
-    );
-
     try {
+      await initNotification();
+      await requestPermissions();
+
+      if (scheduledDate.isBefore(DateTime.now())) return;
+
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'echo_notes_reminders',
+        'Note Reminders',
+        channelDescription: 'Notifications for Echo Notes reminders',
+        importance: Importance.max,
+        priority: Priority.high,
+        showWhen: true,
+      );
+
+      const NotificationDetails notificationDetails = NotificationDetails(
+        android: androidDetails,
+        iOS: DarwinNotificationDetails(),
+        macOS: DarwinNotificationDetails(),
+      );
+
       final tzScheduledTime = tz.TZDateTime.from(scheduledDate, tz.local);
       await flutterLocalNotificationsPlugin.zonedSchedule(
         id: id,

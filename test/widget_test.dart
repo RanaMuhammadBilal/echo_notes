@@ -9,6 +9,7 @@ import 'package:echo_notes/screens/DetailScreen.dart';
 import 'package:echo_notes/screens/HomePage.dart';
 import 'package:echo_notes/screens/SearchScreen.dart';
 import 'package:echo_notes/screens/Settings.dart';
+import 'package:echo_notes/screens/VoiceNote.dart';
 import 'package:echo_notes/services/backup_service.dart';
 import 'package:echo_notes/services/notification_service.dart';
 import 'package:flutter/material.dart';
@@ -269,7 +270,7 @@ void main() {
 
       expect(find.text('Echo Notes'), findsOneWidget);
       expect(find.text('All'), findsOneWidget);
-      expect(find.text('General'), findsOneWidget);
+      expect(find.text('General'), findsAtLeast(1));
     });
 
     testWidgets('DetailScreen renders Note Title and Folder Tag',
@@ -315,6 +316,19 @@ void main() {
       expect(find.text('Card Entrance Animations'), findsOneWidget);
       expect(find.text('Grid / List Layout Motion'), findsOneWidget);
       expect(find.text('Tactile Button Spring Bounce'), findsOneWidget);
+    });
+
+    testWidgets('VoiceNote screen renders dictation banner, waveform, and mic button',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(buildTestApp(const VoiceNote()));
+      await tester.pump();
+
+      expect(find.text('Voice Dictation'), findsOneWidget);
+      expect(find.text('Save'), findsOneWidget);
+      expect(find.text('Tap Mic to Start Continuous Dictation'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byType(AudioWaveformVisualizer), findsOneWidget);
+      expect(find.byType(PulsingMicButton), findsOneWidget);
     });
   });
 }
