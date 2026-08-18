@@ -44,13 +44,13 @@ class SettingsState extends State<Settings> {
 
   Future<void> _importBackup(BuildContext context, NotesProvider notesProvider) async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final files = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
       );
 
-      if (result != null && result.files.isNotEmpty) {
-        final filePath = result.files.single.path;
+      if (files.isNotEmpty) {
+        final filePath = files.first.path;
         if (filePath != null) {
           final file = File(filePath);
           final content = await file.readAsString();

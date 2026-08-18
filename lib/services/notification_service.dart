@@ -104,8 +104,8 @@ class NotificationService {
   }
 
   Future<void> cancelReminder(int id) async {
-    await initNotification();
     try {
+      await initNotification();
       await flutterLocalNotificationsPlugin.cancel(id: id);
     } catch (e) {
       debugPrint('Error cancelling notification: $e');

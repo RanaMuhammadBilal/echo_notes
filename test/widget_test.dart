@@ -1,9 +1,31 @@
+import 'dart:io';
+import 'package:echo_notes/AppThemes.dart';
+import 'package:echo_notes/AuthenticationProvider.dart';
+import 'package:echo_notes/ThemeProvider.dart';
 import 'package:echo_notes/models/note_model.dart';
+import 'package:echo_notes/provider_notes.dart';
+import 'package:echo_notes/screens/DetailScreen.dart';
+import 'package:echo_notes/screens/HomePage.dart';
+import 'package:echo_notes/screens/SearchScreen.dart';
+import 'package:echo_notes/screens/Settings.dart';
 import 'package:echo_notes/services/backup_service.dart';
+import 'package:echo_notes/services/notification_service.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:provider/provider.dart';
 
 void main() {
-  group('NoteModel Tests', () {
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final tempDir = await Directory.systemTemp.createTemp('hive_test_dir');
+    Hive.init(tempDir.path);
+    if (!Hive.isBoxOpen('notesBox')) await Hive.openBox('notesBox');
+    if (!Hive.isBoxOpen('categoryBox')) await Hive.openBox('categoryBox');
+    if (!Hive.isBoxOpen('settings')) await Hive.openBox('settings');
+  });
+
+  group('1. NoteModel Unit Tests', () {
     test('NoteModel serialization and deserialization works correctly', () {
       final note = NoteModel(
         key: 1,
@@ -40,11 +62,12 @@ void main() {
         timestamp: '18 August, 2026, 6:00 PM',
       );
 
-      expect(note.plainTextSnippet, equals('Just plain text without JSON format'));
+      expect(
+          note.plainTextSnippet, equals('Just plain text without JSON format'));
     });
   });
 
-  group('BackupService Tests', () {
+  group('2. BackupService Unit Tests', () {
     test('JSON Backup creation and parsing works correctly', () {
       final notes = [
         {
@@ -90,6 +113,166 @@ void main() {
       expect(md, contains('# My Important Note'));
       expect(md, contains('_Created on 18 August, 2026 • Notebook: Ideas_'));
       expect(md, contains('Sample markdown text'));
+    });
+
+    test('parseJsonBackup returns null for invalid JSON string', () {
+      final parsed = BackupService.parseJsonBackup("invalid_json_string");
+      expect(parsed, isNull);
+    });
+  });
+
+  group('3. AppThemes & ThemeProvider Unit Tests', () {
+    test('AppThemes defines all themes with valid color schemes', () {
+      expect(AppThemes.lightTheme.colorScheme.primary, isNotNull);
+      expect(AppThemes.darkTheme.brightness, equals(Brightness.dark));
+      expect(AppThemes.amethystVelvet.colorScheme.primary,
+          equals(const Color(0xFFD0BCFF)));
+      expect(AppThemes.matchaCream.colorScheme.primary,
+          equals(const Color(0xFF4A6B22)));
+    });
+
+    test('ThemeProvider loads theme and switches themes correctly', () async {
+      final themeProvider = ThemeProvider();
+      await themeProvider.saveTheme('amethyst');
+      expect(themeProvider.currentThemeName, equals('amethyst'));
+      expect(themeProvider.getThemeData().colorScheme.primary,
+          equals(const Color(0xFFD0BCFF)));
+
+      await themeProvider.saveTheme('matcha');
+      expect(themeProvider.currentThemeName, equals('matcha'));
+      expect(themeProvider.getThemeData().colorScheme.primary,
+          equals(const Color(0xFF4A6B22)));
+    });
+  });
+
+  group('4. NotesProvider Unit Tests', () {
+    test(
+        'NotesProvider toggles grid view, borders, animations, and glassmorphism',
+        () {
+      final provider = NotesProvider();
+
+      final initialGrid = provider.isGridView;
+      provider.toggleGridView();
+      expect(provider.isGridView, equals(!initialGrid));
+
+      final initialBorder = provider.showNoteBorder;
+      provider.toggleNoteBorder();
+      expect(provider.showNoteBorder, equals(!initialBorder));
+
+      final initialAnim = provider.enableAnimations;
+      provider.toggleAnimations();
+      expect(provider.enableAnimations, equals(!initialAnim));
+
+      final initialGlass = provider.enableGlassmorphism;
+      provider.toggleGlassmorphism();
+      expect(provider.enableGlassmorphism, equals(!initialGlass));
+    });
+
+    test('NotesProvider adds, edits, pins, locks, and deletes notes', () {
+      final provider = NotesProvider();
+
+      final initialCount = provider.notes.length;
+      provider.addNote(
+        "Unit Test Note",
+        "Unit Test Content",
+        "General",
+      );
+
+      expect(provider.notes.length, equals(initialCount + 1));
+      final addedKey = provider.notes.first['key'];
+
+      provider.togglePin(addedKey);
+      expect(provider.notes.first['isPinned'], isTrue);
+
+      provider.toggleNoteLock(addedKey);
+      expect(provider.notes.first['isLocked'], isTrue);
+
+      provider.deleteNote(addedKey);
+      expect(provider.trashedNotes.any((n) => n['key'] == addedKey), isTrue);
+
+      provider.restoreNote(addedKey);
+      expect(provider.notes.any((n) => n['key'] == addedKey), isTrue);
+
+      provider.permanentlyDeleteNote(addedKey);
+      expect(provider.notes.any((n) => n['key'] == addedKey), isFalse);
+    });
+  });
+
+  group('5. AuthenticationProvider Unit Tests', () {
+    test('AuthenticationProvider stores and updates authentication state',
+        () async {
+      final authProvider = AuthenticationProvider();
+      await authProvider.saveAuthentication(value: true);
+      expect(authProvider.getAuthenticationValue(), isTrue);
+
+      await authProvider.saveAuthentication(value: false);
+      expect(authProvider.getAuthenticationValue(), isFalse);
+    });
+  });
+
+  group('6. NotificationService Unit Tests', () {
+    test('NotificationService initializes safely', () async {
+      final notif = NotificationService();
+      expect(notif, isNotNull);
+    });
+  });
+
+  group('7. Widget Tests', () {
+    Widget buildTestApp(Widget child) {
+      return MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => ThemeProvider()),
+          ChangeNotifierProvider(create: (_) => NotesProvider()),
+          ChangeNotifierProvider(create: (_) => AuthenticationProvider()),
+        ],
+        child: MaterialApp(
+          home: child,
+        ),
+      );
+    }
+
+    testWidgets('HomePage renders App Title and Category Chips',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(buildTestApp(const HomePage()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Echo Notes'), findsOneWidget);
+      expect(find.text('All'), findsOneWidget);
+      expect(find.text('General'), findsOneWidget);
+    });
+
+    testWidgets('DetailScreen renders Note Title and Folder Tag',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(buildTestApp(const DetailScreen(
+        index: 999,
+        titleNote: 'Sample Detail Note',
+        contentNote: 'Sample Content text',
+        timestamp: '18 August 2026',
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sample Detail Note'), findsOneWidget);
+      expect(find.text('18 August 2026'), findsOneWidget);
+    });
+
+    testWidgets('SearchScreen renders Search Input and Empty State',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(buildTestApp(const SearchScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Search Notes'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+    });
+
+    testWidgets('Settings screen renders App Theme and Animation Options',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(buildTestApp(const Settings()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Settings'), findsOneWidget);
+      expect(find.text('App Theme'), findsOneWidget);
+      expect(find.text('App Animations'), findsOneWidget);
+      expect(find.text('Glassmorphic Blur Effects'), findsOneWidget);
     });
   });
 }
