@@ -931,113 +931,232 @@ class _HomePageState extends State<HomePage> {
 
   void _showNoteActions(BuildContext context, dynamic noteKey, NoteModel note,
       NotesProvider provider) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.check_box_outlined),
-              title: const Text('Select Notes'),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() {
-                  isSelectionMode = true;
-                  selectedNoteKeys.add(noteKey);
-                });
-              },
-            ),
-            ListTile(
-              leading: Icon(note.isPinned
-                  ? Icons.push_pin_outlined
-                  : Icons.push_pin),
-              title: Text(note.isPinned ? 'Unpin Note' : 'Pin to Top'),
-              onTap: () {
-                provider.togglePin(noteKey);
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: Icon(
-                  note.isLocked ? Icons.lock_open_rounded : Icons.lock_rounded,
-                  color: note.isLocked ? Colors.orange : null),
-              title: Text(note.isLocked
-                  ? 'Unlock Note'
-                  : 'Lock Note (Security Required)'),
-              onTap: () async {
-                Navigator.pop(context);
-                final auth = AuthenticationServices();
-                bool isSecure = await auth.isDeviceSecure();
-                if (!isSecure) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text(
-                              'Please set up a PIN/Biometrics on your device first.')),
-                    );
-                  }
-                  return;
-                }
-                bool success = await auth.authenticateLocally();
-                if (success) {
-                  provider.toggleNoteLock(noteKey);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(note.isLocked
-                            ? 'Note Unlocked'
-                            : 'Note Locked with Security'),
-                      ),
-                    );
-                  }
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.drive_file_move),
-              title: const Text('Move to Folder'),
-              onTap: () {
-                Navigator.pop(context);
-                _showFolderPicker(context, noteKey, provider);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('Edit Note'),
-              onTap: () async {
-                Navigator.pop(context);
-                if (note.isLocked) {
-                  bool authSuccess = await _authenticateLockedNote(context);
-                  if (!authSuccess) return;
-                }
-                if (context.mounted) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => EditNote(
-                        index: noteKey,
-                        title: note.title,
-                        content: note.content,
-                      ),
-                    ),
-                  );
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: const Text('Move to Trash',
-                  style: TextStyle(color: Colors.red)),
-              onTap: () {
-                provider.deleteNote(noteKey);
-                Navigator.pop(context);
-              },
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(40),
+              blurRadius: 20,
+              spreadRadius: 2,
             ),
           ],
         ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Top Drag Handle Bar
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: colorScheme.onSurfaceVariant.withAlpha(80),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // Note Header Summary Card
+              Container(
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest.withAlpha(100),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.description_outlined,
+                        color: colorScheme.primary, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            note.title.isEmpty ? 'Untitled Note' : note.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${note.folder} • ${note.timestamp}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Action Tiles
+              _buildModalActionTile(
+                context,
+                icon: Icons.checklist_rtl_rounded,
+                title: 'Select Notes',
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    isSelectionMode = true;
+                    selectedNoteKeys.add(noteKey);
+                  });
+                },
+              ),
+              _buildModalActionTile(
+                context,
+                icon: note.isPinned
+                    ? Icons.push_pin_outlined
+                    : Icons.push_pin_rounded,
+                title: note.isPinned ? 'Unpin Note' : 'Pin to Top',
+                iconColor: note.isPinned ? null : colorScheme.primary,
+                onTap: () {
+                  provider.togglePin(noteKey);
+                  Navigator.pop(context);
+                },
+              ),
+              _buildModalActionTile(
+                context,
+                icon: note.isLocked
+                    ? Icons.lock_open_rounded
+                    : Icons.enhanced_encryption_rounded,
+                title: note.isLocked
+                    ? 'Unlock Note'
+                    : 'Lock Note (Biometric Security)',
+                iconColor: note.isLocked ? Colors.orange : colorScheme.primary,
+                onTap: () async {
+                  Navigator.pop(context);
+                  final auth = AuthenticationServices();
+                  bool isSecure = await auth.isDeviceSecure();
+                  if (!isSecure) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Please set up a PIN/Biometrics on your device first.'),
+                        ),
+                      );
+                    }
+                    return;
+                  }
+                  bool success = await auth.authenticateLocally();
+                  if (success) {
+                    provider.toggleNoteLock(noteKey);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(note.isLocked
+                              ? 'Note Unlocked'
+                              : 'Note Locked with Security'),
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+              _buildModalActionTile(
+                context,
+                icon: Icons.folder_copy_rounded,
+                title: 'Move to Notebook',
+                onTap: () {
+                  Navigator.pop(context);
+                  _showFolderPicker(context, noteKey, provider);
+                },
+              ),
+              _buildModalActionTile(
+                context,
+                icon: Icons.edit_note_rounded,
+                title: 'Edit Note',
+                onTap: () async {
+                  Navigator.pop(context);
+                  if (note.isLocked) {
+                    bool authSuccess = await _authenticateLockedNote(context);
+                    if (!authSuccess) return;
+                  }
+                  if (context.mounted) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditNote(
+                          index: noteKey,
+                          title: note.title,
+                          content: note.content,
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+              const Divider(height: 16),
+              _buildModalActionTile(
+                context,
+                icon: Icons.delete_outline_rounded,
+                title: 'Move to Trash',
+                iconColor: Colors.red,
+                textColor: Colors.red,
+                onTap: () {
+                  provider.deleteNote(noteKey);
+                  Navigator.pop(context);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModalActionTile(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    Color? iconColor,
+    Color? textColor,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: ListTile(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (iconColor ?? colorScheme.primary).withAlpha(20),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: iconColor ?? colorScheme.primary, size: 20),
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            color: textColor ?? colorScheme.onSurface,
+          ),
+        ),
+        trailing: Icon(Icons.chevron_right_rounded,
+            size: 18, color: colorScheme.onSurfaceVariant.withAlpha(120)),
+        onTap: onTap,
       ),
     );
   }

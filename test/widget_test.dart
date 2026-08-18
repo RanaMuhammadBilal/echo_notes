@@ -228,6 +228,24 @@ void main() {
       final notif = NotificationService();
       expect(notif, isNotNull);
     });
+
+    test('NotesProvider setNoteReminder updates and clears note reminderDateTime', () {
+      final provider = NotesProvider();
+      provider.addNote("Reminder Test Note", "Content", "General");
+      final key = provider.notes.first['key'];
+
+      final futureDate = DateTime.now().add(const Duration(days: 1));
+      provider.setNoteReminder(key, futureDate);
+
+      final updatedNote = provider.notes.firstWhere((n) => n['key'] == key);
+      expect(updatedNote['reminderDateTime'], isNotNull);
+      expect(updatedNote['reminderDateTime'], equals(futureDate.toIso8601String()));
+
+      // Clear reminder
+      provider.setNoteReminder(key, null);
+      final clearedNote = provider.notes.firstWhere((n) => n['key'] == key);
+      expect(clearedNote['reminderDateTime'], isNull);
+    });
   });
 
   group('7. Widget Tests', () {
