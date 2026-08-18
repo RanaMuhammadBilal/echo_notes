@@ -46,6 +46,7 @@ class _DetailScreenState extends State<DetailScreen> {
   int _lastEndOffset = 0;    //  Remembers the end of the word
   int _globalOffset = 0;
 
+
   @override
   void initState() {
     super.initState();
