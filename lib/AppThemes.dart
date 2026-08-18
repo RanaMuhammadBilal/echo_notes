@@ -222,4 +222,30 @@ class AppThemes {
     scaffoldBackgroundColor: const Color(0xFFFDFCF0),
   );
 
+  // 19. Amethyst Velvet (Deep Royal Purple)
+  static final amethystVelvet = ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    colorScheme: const ColorScheme.dark(
+      primary: Color(0xFFD0BCFF),
+      secondary: Color(0xFFCCC2DC),
+      surface: Color(0xFF1D1B20),
+      surfaceContainerLow: Color(0xFF2B2830),
+    ),
+    scaffoldBackgroundColor: const Color(0xFF141218),
+  );
+
+  // 20. Matcha Cream (Japanese Zen Organic)
+  static final matchaCream = ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.light,
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: const Color(0xFF6B8E23),
+      surface: const Color(0xFFF4F6F0),
+      primary: const Color(0xFF4A6B22),
+      secondary: const Color(0xFF8FA872),
+    ),
+    scaffoldBackgroundColor: const Color(0xFFF4F6F0),
+  );
+
 }

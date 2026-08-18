@@ -9,7 +9,8 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:image_picker/image_picker.dart';
 
 class AddNote extends StatefulWidget {
-  const AddNote({super.key});
+  final String? initialCategory;
+  const AddNote({super.key, this.initialCategory});
 
   @override
   State<AddNote> createState() => _AddNoteState();
@@ -38,9 +39,10 @@ class _AddNoteState extends State<AddNote> {
   @override
   void initState() {
     super.initState();
-    // ... your existing init code ...
+    if (widget.initialCategory != null && widget.initialCategory!.isNotEmpty) {
+      _selectedCategory = widget.initialCategory!;
+    }
 
-    // ✅ Add listener to the editor's FocusNode
     _editorFocusNode.addListener(() {
       if (_editorFocusNode.hasFocus) {
         // Small delay to allow the keyboard to start opening

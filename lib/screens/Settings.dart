@@ -131,6 +131,8 @@ class SettingsState extends State<Settings> {
                         _buildThemeOption(context, 'valentine', 'Valentine', const Color(0xFFFF4D6D), const Color(0xFFFFF0F3)),
                         _buildThemeOption(context, 'volcano', 'Volcano', const Color(0xFFFF5722), const Color(0xFF121212)),
                         _buildThemeOption(context, 'ivory', 'Ivory', const Color(0xFF5D4037), const Color(0xFFFDFCF0)),
+                        _buildThemeOption(context, 'amethyst', 'Amethyst', const Color(0xFFD0BCFF), const Color(0xFF1D1B20)),
+                        _buildThemeOption(context, 'matcha', 'Matcha', const Color(0xFF4A6B22), const Color(0xFFF4F6F0)),
                       ],
                     ),
                   ),

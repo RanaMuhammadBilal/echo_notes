@@ -10,7 +10,6 @@ import 'package:echo_notes/screens/Settings.dart';
 import 'package:echo_notes/screens/VoiceNote.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
-import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 class HomePage extends StatefulWidget {
@@ -137,6 +136,10 @@ class _HomePageState extends State<HomePage> {
     final List<String> folders = ["All", ...provider.categories];
     final bool isMonochrome = colorScheme.primary == Colors.black;
 
+    // Resolve active category for creating new notes
+    final String targetCategory =
+        selectedFolder == "All" ? "General" : selectedFolder;
+
     return Scaffold(
       appBar: AppBar(
         leading: isSelectionMode
@@ -166,7 +169,6 @@ class _HomePageState extends State<HomePage> {
               },
             )
           else ...[
-            // View Mode Toggle Button (Grid vs List)
             IconButton(
               tooltip: provider.isGridView ? 'List View' : 'Grid View',
               icon: Icon(
@@ -347,7 +349,10 @@ class _HomePageState extends State<HomePage> {
                           onPressed: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (context) => const AddNote()),
+                              builder: (context) => AddNote(
+                                initialCategory: targetCategory,
+                              ),
+                            ),
                           ),
                           style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
@@ -356,7 +361,9 @@ class _HomePageState extends State<HomePage> {
                                 borderRadius: BorderRadius.circular(16)),
                           ),
                           icon: const Icon(Icons.edit_note_rounded),
-                          label: const Text('Write a Note'),
+                          label: Text(selectedFolder == "All"
+                              ? 'Write a Note'
+                              : 'Write in $selectedFolder'),
                         ),
                       ],
                     ),
@@ -371,32 +378,27 @@ class _HomePageState extends State<HomePage> {
                       crossAxisCount: 2,
                       mainAxisSpacing: 12,
                       crossAxisSpacing: 12,
-                      childAspectRatio: 0.88,
+                      childAspectRatio: 0.82,
                     ),
                     itemCount: rawNotes.length,
                     itemBuilder: (context, index) {
                       final NoteModel note = NoteModel.fromMap(
                           rawNotes[index]['key'], rawNotes[index]);
-                      return _buildNoteCard(
-                          context, note, colorScheme, isMonochrome, provider,
-                          isGrid: true);
+                      return _buildGridCard(
+                          context, note, colorScheme, isMonochrome, provider);
                     },
                   );
                 }
 
                 return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                  padding: const EdgeInsets.only(bottom: 100),
                   controller: _scrollController,
                   itemCount: rawNotes.length,
                   itemBuilder: (context, index) {
                     final NoteModel note = NoteModel.fromMap(
                         rawNotes[index]['key'], rawNotes[index]);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _buildNoteCard(
-                          context, note, colorScheme, isMonochrome, provider,
-                          isGrid: false),
-                    );
+                    return _buildListCard(
+                        context, note, colorScheme, isMonochrome, provider);
                   },
                 );
               },
@@ -416,7 +418,7 @@ class _HomePageState extends State<HomePage> {
                   heroTag: 'btn3',
                   onPressed: () {
                     Navigator.push(context,
-                        MaterialPageRoute(builder: (context) => Settings()));
+                        MaterialPageRoute(builder: (context) => const Settings()));
                     fabKey.currentState?.close();
                   },
                   child: const Icon(Icons.settings_rounded),
@@ -425,9 +427,13 @@ class _HomePageState extends State<HomePage> {
                   heroTag: 'btn1',
                   onPressed: () {
                     Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const AddNote()));
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AddNote(
+                          initialCategory: targetCategory,
+                        ),
+                      ),
+                    );
                     fabKey.currentState?.close();
                   },
                   child: const Icon(Icons.add),
@@ -438,7 +444,7 @@ class _HomePageState extends State<HomePage> {
                     Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (context) => VoiceNote()));
+                            builder: (context) => const VoiceNote()));
                     fabKey.currentState?.close();
                   },
                   child: const Icon(Icons.mic),
@@ -448,14 +454,153 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildNoteCard(
+  // --- RESTORED ORIGINAL LIST CARD DIMENSIONS & LAYOUT ---
+  Widget _buildListCard(
     BuildContext context,
     NoteModel note,
     ColorScheme colorScheme,
     bool isMonochrome,
-    NotesProvider provider, {
-    required bool isGrid,
-  }) {
+    NotesProvider provider,
+  ) {
+    final dynamic noteKey = note.key;
+    final bool isSelected = selectedNoteKeys.contains(noteKey);
+    final Color selectionColor = isMonochrome
+        ? Colors.black.withAlpha(30)
+        : colorScheme.primaryContainer;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: OpenContainer(
+        transitionDuration: const Duration(milliseconds: 500),
+        closedColor:
+            isSelected ? selectionColor : colorScheme.surfaceContainerLow,
+        closedShape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        closedElevation: 0,
+        openElevation: 0,
+        openColor: Theme.of(context).scaffoldBackgroundColor,
+        closedBuilder: (context, openContainer) => InkWell(
+          onTap: () async {
+            if (isSelectionMode) {
+              _toggleSelection(noteKey);
+              return;
+            }
+            if (note.isLocked) {
+              bool authSuccess = await _authenticateLockedNote(context);
+              if (authSuccess) {
+                openContainer();
+              }
+            } else {
+              openContainer();
+            }
+          },
+          onLongPress: isSelectionMode
+              ? () => _toggleSelection(noteKey)
+              : () => _showNoteActions(context, noteKey, note, provider),
+          borderRadius: BorderRadius.circular(24),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isSelected ? selectionColor : colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: isSelected
+                    ? colorScheme.primary
+                    : (note.isPinned
+                        ? colorScheme.primary.withAlpha(150)
+                        : colorScheme.primary.withAlpha(25)),
+                width: (isSelected || note.isPinned) ? 2 : 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    if (isSelectionMode)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Icon(
+                          isSelected
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
+                          color: isSelected
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    Expanded(
+                      child: Text(
+                        note.title,
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (note.isLocked && !isSelectionMode)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 4),
+                        child: Icon(Icons.lock_rounded,
+                            size: 18, color: Colors.orange),
+                      ),
+                    if (note.isPinned && !isSelectionMode)
+                      Icon(Icons.push_pin_rounded,
+                          size: 18, color: colorScheme.primary),
+                  ],
+                ),
+                const SizedBox(height: 28),
+                Row(
+                  children: [
+                    Icon(Icons.folder_open_rounded,
+                        size: 14, color: colorScheme.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      note.folder,
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    if (note.reminderDateTime != null) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.notifications_active_rounded,
+                          size: 14, color: Colors.amber),
+                    ],
+                    const Spacer(),
+                    Icon(Icons.access_time_rounded,
+                        size: 14, color: colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(
+                      note.timestamp,
+                      style: TextStyle(
+                          fontSize: 11, color: colorScheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        openBuilder: (context, _) => DetailScreen(
+          titleNote: note.title,
+          contentNote: note.content,
+          timestamp: note.timestamp,
+          index: noteKey,
+        ),
+      ),
+    );
+  }
+
+  // --- GRID CARD DESIGNED SPECIFICALLY TO PREVENT ANY OVERFLOW ---
+  Widget _buildGridCard(
+    BuildContext context,
+    NoteModel note,
+    ColorScheme colorScheme,
+    bool isMonochrome,
+    NotesProvider provider,
+  ) {
     final dynamic noteKey = note.key;
     final bool isSelected = selectedNoteKeys.contains(noteKey);
     final Color selectionColor = isMonochrome
@@ -467,7 +612,7 @@ class _HomePageState extends State<HomePage> {
       closedColor:
           isSelected ? selectionColor : colorScheme.surfaceContainerLow,
       closedShape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       closedElevation: 0,
       openElevation: 0,
       openColor: Theme.of(context).scaffoldBackgroundColor,
@@ -489,13 +634,13 @@ class _HomePageState extends State<HomePage> {
         onLongPress: isSelectionMode
             ? () => _toggleSelection(noteKey)
             : () => _showNoteActions(context, noteKey, note, provider),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color:
                 isSelected ? selectionColor : colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isSelected
                   ? colorScheme.primary
@@ -516,7 +661,7 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       if (isSelectionMode)
                         Padding(
-                          padding: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.only(right: 6),
                           child: Icon(
                             isSelected
                                 ? Icons.check_circle
@@ -524,14 +669,14 @@ class _HomePageState extends State<HomePage> {
                             color: isSelected
                                 ? colorScheme.primary
                                 : colorScheme.onSurfaceVariant,
-                            size: 20,
+                            size: 18,
                           ),
                         ),
                       Expanded(
                         child: Text(
                           note.title,
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: colorScheme.onSurface,
                           ),
@@ -543,75 +688,81 @@ class _HomePageState extends State<HomePage> {
                         const Padding(
                           padding: EdgeInsets.only(left: 4),
                           child: Icon(Icons.lock_rounded,
-                              size: 16, color: Colors.orange),
+                              size: 15, color: Colors.orange),
                         ),
                       if (note.isPinned && !isSelectionMode)
                         Padding(
                           padding: const EdgeInsets.only(left: 4),
                           child: Icon(Icons.push_pin_rounded,
-                              size: 16, color: colorScheme.primary),
+                              size: 15, color: colorScheme.primary),
                         ),
                     ],
                   ),
-                  if (note.reminderDateTime != null) ...[
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(Icons.notifications_active_rounded,
-                            size: 12, color: Colors.amber),
-                        const SizedBox(width: 4),
-                        Text(
-                          DateFormat('d MMM, h:mm a').format(
-                            DateTime.parse(note.reminderDateTime!),
-                          ),
-                          style: const TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (isGrid && !note.isLocked) ...[
-                    const SizedBox(height: 8),
+                  const SizedBox(height: 6),
+                  if (!note.isLocked && note.plainTextSnippet.isNotEmpty)
                     Text(
                       note.plainTextSnippet,
-                      maxLines: 3,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
                         color: colorScheme.onSurfaceVariant.withAlpha(180),
+                        height: 1.3,
+                      ),
+                    )
+                  else if (note.isLocked)
+                    Text(
+                      "Locked Note",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        color: colorScheme.onSurfaceVariant.withAlpha(140),
                       ),
                     ),
-                  ],
                 ],
               ),
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Row(
-                  children: [
-                    Icon(Icons.folder_open_rounded,
-                        size: 13, color: colorScheme.primary),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        note.folder,
-                        style: const TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.folder_open_rounded,
+                          size: 12, color: colorScheme.primary),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          note.folder,
+                          style: const TextStyle(
+                              fontSize: 11, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                    Icon(Icons.access_time_rounded,
-                        size: 12, color: colorScheme.onSurfaceVariant),
-                    const SizedBox(width: 4),
-                    Text(
-                      note.timestamp,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: colorScheme.onSurfaceVariant,
+                      if (note.reminderDateTime != null)
+                        const Icon(Icons.notifications_active_rounded,
+                            size: 12, color: Colors.amber),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Icon(Icons.access_time_rounded,
+                          size: 11, color: colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          note.timestamp,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),

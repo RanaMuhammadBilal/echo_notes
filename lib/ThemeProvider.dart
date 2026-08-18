@@ -32,6 +32,8 @@ class ThemeProvider extends ChangeNotifier {
       case 'valentine': return AppThemes.valentineTheme;
       case 'volcano': return AppThemes.volcanoMagma;
       case 'ivory': return AppThemes.ivoryPaper;
+      case 'amethyst': return AppThemes.amethystVelvet;
+      case 'matcha': return AppThemes.matchaCream;
       default: return AppThemes.lightTheme;
     }
   }
