@@ -165,6 +165,58 @@ class SettingsState extends State<Settings> {
           ),
           const SizedBox(height: 12),
 
+          // --- ANIMATIONS & VISUAL EFFECTS SECTION ---
+          Card(
+            elevation: 0,
+            color: colorScheme.surfaceContainerHighest.withAlpha(80),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                SwitchListTile.adaptive(
+                  secondary: Icon(Icons.auto_awesome_rounded, color: colorScheme.primary),
+                  value: notesProvider.enableAnimations,
+                  onChanged: (_) => notesProvider.toggleAnimations(),
+                  title: const Text('App Animations', style: TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Master switch for all UI animations'),
+                ),
+                if (notesProvider.enableAnimations) ...[
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  SwitchListTile.adaptive(
+                    contentPadding: const EdgeInsets.only(left: 40, right: 16),
+                    value: notesProvider.enableCardAnimations,
+                    onChanged: (_) => notesProvider.toggleCardAnimations(),
+                    title: const Text('Card Entrance Animations', style: TextStyle(fontSize: 14)),
+                    subtitle: const Text('Staggered entry effects for note cards', style: TextStyle(fontSize: 12)),
+                  ),
+                  SwitchListTile.adaptive(
+                    contentPadding: const EdgeInsets.only(left: 40, right: 16),
+                    value: notesProvider.enableChipAnimations,
+                    onChanged: (_) => notesProvider.toggleChipAnimations(),
+                    title: const Text('Category Chip Scaling', style: TextStyle(fontSize: 14)),
+                    subtitle: const Text('Interactive micro-scaling on selection', style: TextStyle(fontSize: 12)),
+                  ),
+                  SwitchListTile.adaptive(
+                    contentPadding: const EdgeInsets.only(left: 40, right: 16),
+                    value: notesProvider.enableHeroTransitions,
+                    onChanged: (_) => notesProvider.toggleHeroTransitions(),
+                    title: const Text('Hero Page Transitions', style: TextStyle(fontSize: 14)),
+                    subtitle: const Text('Fluid note card expansion transitions', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                SwitchListTile.adaptive(
+                  secondary: Icon(Icons.blur_on_rounded, color: colorScheme.primary),
+                  value: notesProvider.enableGlassmorphism,
+                  onChanged: (_) => notesProvider.toggleGlassmorphism(),
+                  title: const Text('Glassmorphic Blur Effects', style: TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Frosted glass backdrop on bars & toolbars'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
           // --- APP-WIDE BIOMETRIC LOCK SECTION (PRESERVED) ---
           Consumer<AuthenticationProvider>(
             builder: (context, authProvider, _) {

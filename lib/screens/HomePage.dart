@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:animations/animations.dart';
 import 'package:echo_notes/AuthenticationServices.dart';
 import 'package:echo_notes/models/note_model.dart';
@@ -136,58 +137,54 @@ class _HomePageState extends State<HomePage> {
     final List<String> folders = ["All", ...provider.categories];
     final bool isMonochrome = colorScheme.primary == Colors.black;
 
-    // Resolve active category for creating new notes
     final String targetCategory =
         selectedFolder == "All" ? "General" : selectedFolder;
 
     return Scaffold(
-      appBar: AppBar(
-        leading: isSelectionMode
-            ? IconButton(
-                icon: const Icon(Icons.close), onPressed: _exitSelectionMode)
-            : null,
-        title: Text(
-            isSelectionMode
-                ? '${selectedNoteKeys.length} Selected'
-                : 'Echo Notes',
-            style: const TextStyle(fontWeight: FontWeight.bold)),
-        centerTitle: true,
-        scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent,
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        actions: [
-          if (isSelectionMode)
-            IconButton(
-              icon: const Icon(Icons.delete_sweep_outlined, color: Colors.red),
-              onPressed: () {
-                for (var key in selectedNoteKeys) {
-                  provider.deleteNote(key);
-                }
-                _exitSelectionMode();
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Moved to Trash')));
-              },
-            )
-          else ...[
-            IconButton(
-              tooltip: provider.isGridView ? 'List View' : 'Grid View',
-              icon: Icon(
-                provider.isGridView
-                    ? Icons.view_agenda_outlined
-                    : Icons.grid_view_rounded,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: provider.enableGlassmorphism
+            ? ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: AppBar(
+                    leading: isSelectionMode
+                        ? IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: _exitSelectionMode)
+                        : null,
+                    title: Text(
+                        isSelectionMode
+                            ? '${selectedNoteKeys.length} Selected'
+                            : 'Echo Notes',
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    centerTitle: true,
+                    scrolledUnderElevation: 0,
+                    surfaceTintColor: Colors.transparent,
+                    backgroundColor: Theme.of(context)
+                        .scaffoldBackgroundColor
+                        .withAlpha(180),
+                    actions: _buildAppBarActions(provider),
+                  ),
+                ),
+              )
+            : AppBar(
+                leading: isSelectionMode
+                    ? IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: _exitSelectionMode)
+                    : null,
+                title: Text(
+                    isSelectionMode
+                        ? '${selectedNoteKeys.length} Selected'
+                        : 'Echo Notes',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                centerTitle: true,
+                scrolledUnderElevation: 0,
+                surfaceTintColor: Colors.transparent,
+                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                actions: _buildAppBarActions(provider),
               ),
-              onPressed: () => provider.toggleGridView(),
-            ),
-            IconButton(
-              onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const SearchScreen())),
-              icon: const Icon(Icons.search),
-              tooltip: 'Search',
-            ),
-          ]
-        ],
       ),
       body: Column(
         children: [
@@ -209,34 +206,43 @@ class _HomePageState extends State<HomePage> {
                     ];
                     bool isDeletable = !defaultCategories.contains(folder);
 
+                    final chipWidget = ChoiceChip(
+                      label: Text(folder),
+                      selected: isSelected,
+                      onSelected: (val) =>
+                          setState(() => selectedFolder = folder),
+                      showCheckmark: false,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
+                      selectedColor: colorScheme.primary,
+                      labelStyle: TextStyle(
+                        color: isSelected
+                            ? colorScheme.onPrimary
+                            : colorScheme.onSurface,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                      side: BorderSide(
+                          color: isSelected
+                              ? Colors.transparent
+                              : colorScheme.primary.withAlpha(50)),
+                    );
+
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: GestureDetector(
                         onLongPress: isDeletable
                             ? () => _showDeleteCategoryDialog(folder)
                             : null,
-                        child: ChoiceChip(
-                          label: Text(folder),
-                          selected: isSelected,
-                          onSelected: (val) =>
-                              setState(() => selectedFolder = folder),
-                          showCheckmark: false,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20)),
-                          selectedColor: colorScheme.primary,
-                          labelStyle: TextStyle(
-                            color: isSelected
-                                ? colorScheme.onPrimary
-                                : colorScheme.onSurface,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                          side: BorderSide(
-                              color: isSelected
-                                  ? Colors.transparent
-                                  : colorScheme.primary.withAlpha(50)),
-                        ),
+                        child: provider.enableChipAnimations
+                            ? AnimatedScale(
+                                scale: isSelected ? 1.05 : 1.0,
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeOutBack,
+                                child: chipWidget,
+                              )
+                            : chipWidget,
                       ),
                     );
                   }),
@@ -384,8 +390,23 @@ class _HomePageState extends State<HomePage> {
                     itemBuilder: (context, index) {
                       final NoteModel note = NoteModel.fromMap(
                           rawNotes[index]['key'], rawNotes[index]);
-                      return _buildGridCard(
+                      final cardWidget = _buildGridCard(
                           context, note, colorScheme, isMonochrome, provider);
+
+                      if (provider.enableCardAnimations) {
+                        return TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0.0, end: 1.0),
+                          duration: Duration(
+                              milliseconds: 250 + (index * 40).clamp(0, 350)),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) => Transform.translate(
+                            offset: Offset(0, (1 - value) * 16),
+                            child: Opacity(opacity: value, child: child),
+                          ),
+                          child: cardWidget,
+                        );
+                      }
+                      return cardWidget;
                     },
                   );
                 }
@@ -397,8 +418,23 @@ class _HomePageState extends State<HomePage> {
                   itemBuilder: (context, index) {
                     final NoteModel note = NoteModel.fromMap(
                         rawNotes[index]['key'], rawNotes[index]);
-                    return _buildListCard(
+                    final cardWidget = _buildListCard(
                         context, note, colorScheme, isMonochrome, provider);
+
+                    if (provider.enableCardAnimations) {
+                      return TweenAnimationBuilder<double>(
+                        tween: Tween<double>(begin: 0.0, end: 1.0),
+                        duration: Duration(
+                            milliseconds: 250 + (index * 40).clamp(0, 350)),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, child) => Transform.translate(
+                          offset: Offset(0, (1 - value) * 16),
+                          child: Opacity(opacity: value, child: child),
+                        ),
+                        child: cardWidget,
+                      );
+                    }
+                    return cardWidget;
                   },
                 );
               },
@@ -454,7 +490,45 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- RESTORED ORIGINAL LIST CARD DIMENSIONS & LAYOUT ---
+  List<Widget> _buildAppBarActions(NotesProvider provider) {
+    if (isSelectionMode) {
+      return [
+        IconButton(
+          icon: const Icon(Icons.delete_sweep_outlined, color: Colors.red),
+          onPressed: () {
+            for (var key in selectedNoteKeys) {
+              provider.deleteNote(key);
+            }
+            _exitSelectionMode();
+            ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Moved to Trash')));
+          },
+        )
+      ];
+    }
+
+    return [
+      IconButton(
+        tooltip: provider.isGridView ? 'List View' : 'Grid View',
+        icon: Icon(
+          provider.isGridView
+              ? Icons.view_agenda_outlined
+              : Icons.grid_view_rounded,
+        ),
+        onPressed: () => provider.toggleGridView(),
+      ),
+      IconButton(
+        onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) => const SearchScreen())),
+        icon: const Icon(Icons.search),
+        tooltip: 'Search',
+      ),
+    ];
+  }
+
+  // --- RESTORED ORIGINAL LIST CARD WITH LOCKED BLUR & HERO SUPPORT ---
   Widget _buildListCard(
     BuildContext context,
     NoteModel note,
@@ -467,6 +541,27 @@ class _HomePageState extends State<HomePage> {
     final Color selectionColor = isMonochrome
         ? Colors.black.withAlpha(30)
         : colorScheme.primaryContainer;
+
+    Widget titleText = Text(
+      note.title,
+      style: TextStyle(
+        fontSize: 19,
+        fontWeight: FontWeight.bold,
+        color: colorScheme.onSurface,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+
+    if (provider.enableHeroTransitions) {
+      titleText = Hero(
+        tag: 'note_title_${note.key}',
+        child: Material(
+          color: Colors.transparent,
+          child: titleText,
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -529,18 +624,7 @@ class _HomePageState extends State<HomePage> {
                               : colorScheme.onSurfaceVariant,
                         ),
                       ),
-                    Expanded(
-                      child: Text(
-                        note.title,
-                        style: TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.onSurface,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
+                    Expanded(child: titleText),
                     if (note.isLocked && !isSelectionMode)
                       const Padding(
                         padding: EdgeInsets.only(right: 4),
@@ -552,7 +636,33 @@ class _HomePageState extends State<HomePage> {
                           size: 18, color: colorScheme.primary),
                   ],
                 ),
-                const SizedBox(height: 28),
+                if (note.isLocked) ...[
+                  const SizedBox(height: 12),
+                  // GORGEOUS FROSTED BLUR EFFECT FOR LOCKED NOTE DESCRIPTION
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: ImageFiltered(
+                      imageFilter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        color: colorScheme.onSurface.withAlpha(20),
+                        child: Text(
+                          "This note description is secured and encrypted with biometric lock.",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ] else ...[
+                  const SizedBox(height: 28),
+                ],
                 Row(
                   children: [
                     Icon(Icons.folder_open_rounded,
@@ -593,7 +703,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- GRID CARD DESIGNED SPECIFICALLY TO PREVENT ANY OVERFLOW ---
+  // --- GRID CARD WITH BLUR EFFECT FOR LOCKED NOTES ---
   Widget _buildGridCard(
     BuildContext context,
     NoteModel note,
@@ -606,6 +716,27 @@ class _HomePageState extends State<HomePage> {
     final Color selectionColor = isMonochrome
         ? Colors.black.withAlpha(30)
         : colorScheme.primaryContainer;
+
+    Widget titleText = Text(
+      note.title,
+      style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: colorScheme.onSurface,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+
+    if (provider.enableHeroTransitions) {
+      titleText = Hero(
+        tag: 'note_title_${note.key}',
+        child: Material(
+          color: Colors.transparent,
+          child: titleText,
+        ),
+      );
+    }
 
     return OpenContainer(
       transitionDuration: const Duration(milliseconds: 500),
@@ -672,18 +803,7 @@ class _HomePageState extends State<HomePage> {
                             size: 18,
                           ),
                         ),
-                      Expanded(
-                        child: Text(
-                          note.title,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: colorScheme.onSurface,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+                      Expanded(child: titleText),
                       if (note.isLocked && !isSelectionMode)
                         const Padding(
                           padding: EdgeInsets.only(left: 4),
@@ -699,7 +819,27 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  if (!note.isLocked && note.plainTextSnippet.isNotEmpty)
+                  if (note.isLocked)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: ImageFiltered(
+                        imageFilter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                        child: Container(
+                          color: colorScheme.onSurface.withAlpha(20),
+                          padding: const EdgeInsets.all(4),
+                          child: Text(
+                            "Secured locked content text blur",
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (note.plainTextSnippet.isNotEmpty)
                     Text(
                       note.plainTextSnippet,
                       maxLines: 2,
@@ -708,15 +848,6 @@ class _HomePageState extends State<HomePage> {
                         fontSize: 12,
                         color: colorScheme.onSurfaceVariant.withAlpha(180),
                         height: 1.3,
-                      ),
-                    )
-                  else if (note.isLocked)
-                    Text(
-                      "Locked Note",
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                        color: colorScheme.onSurfaceVariant.withAlpha(140),
                       ),
                     ),
                 ],

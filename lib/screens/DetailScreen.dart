@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui';
 import 'package:echo_notes/models/note_model.dart';
 
 import 'package:echo_notes/screens/EditNote.dart';
@@ -746,15 +747,31 @@ class _DetailScreenState extends State<DetailScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-                  child: SelectableText(
-                    currentNote.title,
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onSurface,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
+                  child: provider.enableHeroTransitions
+                      ? Hero(
+                          tag: 'note_title_${widget.index}',
+                          child: Material(
+                            color: Colors.transparent,
+                            child: SelectableText(
+                              currentNote.title,
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onSurface,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                          ),
+                        )
+                      : SelectableText(
+                          currentNote.title,
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.onSurface,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),

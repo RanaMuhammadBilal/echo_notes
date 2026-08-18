@@ -16,6 +16,22 @@ class NotesProvider extends ChangeNotifier {
   bool _isGridView = false;
   bool get isGridView => _isGridView;
 
+  // --- ANIMATION & VISUAL PREFERENCES ---
+  bool _enableAnimations = true;
+  bool get enableAnimations => _enableAnimations;
+
+  bool _enableCardAnimations = true;
+  bool get enableCardAnimations => _enableAnimations && _enableCardAnimations;
+
+  bool _enableChipAnimations = true;
+  bool get enableChipAnimations => _enableAnimations && _enableChipAnimations;
+
+  bool _enableHeroTransitions = true;
+  bool get enableHeroTransitions => _enableAnimations && _enableHeroTransitions;
+
+  bool _enableGlassmorphism = true;
+  bool get enableGlassmorphism => _enableGlassmorphism;
+
   List<Map<String, dynamic>> _notes = [];
   List<String> _categories = [];
 
@@ -68,6 +84,11 @@ class NotesProvider extends ChangeNotifier {
   void _loadPreferences() {
     _showNoteBorder = _settingsBox.get('showNoteBorder', defaultValue: true);
     _isGridView = _settingsBox.get('isGridView', defaultValue: false);
+    _enableAnimations = _settingsBox.get('enableAnimations', defaultValue: true);
+    _enableCardAnimations = _settingsBox.get('enableCardAnimations', defaultValue: true);
+    _enableChipAnimations = _settingsBox.get('enableChipAnimations', defaultValue: true);
+    _enableHeroTransitions = _settingsBox.get('enableHeroTransitions', defaultValue: true);
+    _enableGlassmorphism = _settingsBox.get('enableGlassmorphism', defaultValue: true);
     notifyListeners();
   }
 
@@ -81,6 +102,41 @@ class NotesProvider extends ChangeNotifier {
   void toggleGridView() {
     _isGridView = !_isGridView;
     _settingsBox.put('isGridView', _isGridView);
+    HapticFeedback.lightImpact();
+    notifyListeners();
+  }
+
+  void toggleAnimations() {
+    _enableAnimations = !_enableAnimations;
+    _settingsBox.put('enableAnimations', _enableAnimations);
+    HapticFeedback.lightImpact();
+    notifyListeners();
+  }
+
+  void toggleCardAnimations() {
+    _enableCardAnimations = !_enableCardAnimations;
+    _settingsBox.put('enableCardAnimations', _enableCardAnimations);
+    HapticFeedback.lightImpact();
+    notifyListeners();
+  }
+
+  void toggleChipAnimations() {
+    _enableChipAnimations = !_enableChipAnimations;
+    _settingsBox.put('enableChipAnimations', _enableChipAnimations);
+    HapticFeedback.lightImpact();
+    notifyListeners();
+  }
+
+  void toggleHeroTransitions() {
+    _enableHeroTransitions = !_enableHeroTransitions;
+    _settingsBox.put('enableHeroTransitions', _enableHeroTransitions);
+    HapticFeedback.lightImpact();
+    notifyListeners();
+  }
+
+  void toggleGlassmorphism() {
+    _enableGlassmorphism = !_enableGlassmorphism;
+    _settingsBox.put('enableGlassmorphism', _enableGlassmorphism);
     HapticFeedback.lightImpact();
     notifyListeners();
   }

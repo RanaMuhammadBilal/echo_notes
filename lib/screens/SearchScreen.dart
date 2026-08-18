@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:animations/animations.dart';
 import 'package:echo_notes/AuthenticationServices.dart';
 import 'package:echo_notes/models/note_model.dart';
@@ -72,11 +73,29 @@ class SearchScreenState extends State<SearchScreen> {
         filteredNotesMap.map((map) => NoteModel.fromMap(map['key'], map)).toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Search Notes',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        centerTitle: true,
-        scrolledUnderElevation: 0,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: notesProvider.enableGlassmorphism
+            ? ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: AppBar(
+                    title: const Text('Search Notes',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    centerTitle: true,
+                    scrolledUnderElevation: 0,
+                    backgroundColor: Theme.of(context)
+                        .scaffoldBackgroundColor
+                        .withAlpha(180),
+                  ),
+                ),
+              )
+            : AppBar(
+                title: const Text('Search Notes',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                centerTitle: true,
+                scrolledUnderElevation: 0,
+              ),
       ),
       body: Column(
         children: [
@@ -155,6 +174,27 @@ class SearchScreenState extends State<SearchScreen> {
                       final note = filteredNotes[index];
                       final dynamic noteKey = note.key;
 
+                      Widget titleText = Text(
+                        note.title,
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      );
+
+                      if (notesProvider.enableHeroTransitions) {
+                        titleText = Hero(
+                          tag: 'note_title_${note.key}',
+                          child: Material(
+                            color: Colors.transparent,
+                            child: titleText,
+                          ),
+                        );
+                      }
+
                       return Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
@@ -198,18 +238,7 @@ class SearchScreenState extends State<SearchScreen> {
                                 children: [
                                   Row(
                                     children: [
-                                      Expanded(
-                                        child: Text(
-                                          note.title,
-                                          style: TextStyle(
-                                            fontSize: 19,
-                                            fontWeight: FontWeight.bold,
-                                            color: colorScheme.onSurface,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
+                                      Expanded(child: titleText),
                                       if (note.isLocked)
                                         const Padding(
                                           padding: EdgeInsets.only(left: 4),
@@ -222,7 +251,34 @@ class SearchScreenState extends State<SearchScreen> {
                                             color: colorScheme.primary),
                                     ],
                                   ),
-                                  const SizedBox(height: 28),
+                                  if (note.isLocked) ...[
+                                    const SizedBox(height: 12),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: ImageFiltered(
+                                        imageFilter: ImageFilter.blur(
+                                            sigmaX: 5.0, sigmaY: 5.0),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
+                                          color: colorScheme.onSurface
+                                              .withAlpha(20),
+                                          child: Text(
+                                            "Secured locked note content description",
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: colorScheme.onSurfaceVariant,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ] else ...[
+                                    const SizedBox(height: 28),
+                                  ],
                                   Row(
                                     children: [
                                       Icon(Icons.folder_open_rounded,

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
@@ -235,25 +236,56 @@ class _AddNoteState extends State<AddNote> {
             SliverPersistentHeader(
               pinned: true,
               delegate: _StickyToolbarDelegate(
-                child: Container(
-                  color: Theme.of(context).scaffoldBackgroundColor, // Matches background
-                  child: Column(
-                    children: [
-                      QuillSimpleToolbar(
-                        controller: _controller,
-                        config: QuillSimpleToolbarConfig(
-                          embedButtons: FlutterQuillEmbeds.toolbarButtons(
-                            imageButtonOptions: const QuillToolbarImageButtonOptions(),
+                child: context.watch<NotesProvider>().enableGlassmorphism
+                    ? ClipRect(
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                          child: Container(
+                            color: Theme.of(context)
+                                .scaffoldBackgroundColor
+                                .withAlpha(200),
+                            child: Column(
+                              children: [
+                                QuillSimpleToolbar(
+                                  controller: _controller,
+                                  config: QuillSimpleToolbarConfig(
+                                    embedButtons:
+                                        FlutterQuillEmbeds.toolbarButtons(
+                                      imageButtonOptions:
+                                          const QuillToolbarImageButtonOptions(),
+                                    ),
+                                    showFontFamily: true,
+                                    showFontSize: true,
+                                    multiRowsDisplay: false,
+                                  ),
+                                ),
+                                const Divider(height: 1),
+                              ],
+                            ),
                           ),
-                          showFontFamily: true,
-                          showFontSize: true,
-                          multiRowsDisplay: false,
+                        ),
+                      )
+                    : Container(
+                        color: Theme.of(context).scaffoldBackgroundColor,
+                        child: Column(
+                          children: [
+                            QuillSimpleToolbar(
+                              controller: _controller,
+                              config: QuillSimpleToolbarConfig(
+                                embedButtons:
+                                    FlutterQuillEmbeds.toolbarButtons(
+                                  imageButtonOptions:
+                                      const QuillToolbarImageButtonOptions(),
+                                ),
+                                showFontFamily: true,
+                                showFontSize: true,
+                                multiRowsDisplay: false,
+                              ),
+                            ),
+                            const Divider(height: 1),
+                          ],
                         ),
                       ),
-                      const Divider(height: 1),
-                    ],
-                  ),
-                ),
               ),
             ),
 
