@@ -49,14 +49,14 @@ dependencies:
   local_auth: ^3.0.1
   flutter_quill: ^11.5.1
   flutter_quill_extensions: ^11.0.0
-  google_mlkit_text_recognition: ^0.16.0
+  google_mlkit_text_recognition: ^0.17.1
   image_picker: ^1.2.3
   pdf: ^3.13.0
   printing: ^5.15.0
   path_provider: ^2.1.6
   flutter_quill_to_pdf: ^2.3.9
-  file_picker: ^10.3.8
-  share_plus: ^10.1.4
+  file_picker: ^12.0.0
+  share_plus: ^13.3.0
   flutter_local_notifications: ^22.3.0
   timezone: ^0.11.1
 
