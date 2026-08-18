@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:echo_notes/provider_notes.dart';
+import 'package:echo_notes/utils/snackbar_utils.dart';
 
 class VoiceNote extends StatefulWidget {
   const VoiceNote({super.key});
@@ -196,11 +197,11 @@ class _VoiceNoteState extends State<VoiceNote>
     }
 
     if (fullText.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please record or type some text first!'),
-          behavior: SnackBarBehavior.floating,
-        ),
+      AppSnackBar.show(
+        context,
+        message: 'Please record or type some text first!',
+        icon: Icons.mic_off_rounded,
+        isError: true,
       );
       return;
     }
@@ -229,11 +230,11 @@ class _VoiceNoteState extends State<VoiceNote>
         );
 
     HapticFeedback.successNotification();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Voice Note saved successfully!'),
-        behavior: SnackBarBehavior.floating,
-      ),
+    AppSnackBar.show(
+      context,
+      message: 'Voice Note saved successfully!',
+      isSuccess: true,
+      icon: Icons.check_circle_outline_rounded,
     );
     Navigator.pop(context);
   }

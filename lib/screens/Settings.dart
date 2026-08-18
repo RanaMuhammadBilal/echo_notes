@@ -11,7 +11,9 @@ import 'package:share_plus/share_plus.dart';
 
 import '../AuthenticationServices.dart';
 import '../provider_notes.dart';
+import '../utils/snackbar_utils.dart';
 import 'AnimationControlScreen.dart';
+import 'RemindersScreen.dart';
 import 'TrashScreen.dart';
 
 class Settings extends StatefulWidget {
@@ -24,9 +26,9 @@ class Settings extends StatefulWidget {
 class SettingsState extends State<Settings> {
   Future<void> _exportBackup(BuildContext context, NotesProvider notesProvider) async {
     try {
-      final jsonContent = notesProvider.exportNotesBackup();
-      final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/echo_notes_backup.json');
+      final jsonContent = await notesProvider.exportNotesBackup();
+      final directory = await getTemporaryDirectory();
+      final file = File('${directory.path}/echo_notes_backup.json');
       await file.writeAsString(jsonContent);
 
       await Share.shareXFiles(
@@ -36,8 +38,10 @@ class SettingsState extends State<Settings> {
       );
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Backup export failed: $e")),
+        AppSnackBar.show(
+          context,
+          message: "Backup export failed: $e",
+          isError: true,
         );
       }
     }
@@ -57,20 +61,24 @@ class SettingsState extends State<Settings> {
           final content = await file.readAsString();
           final success = await notesProvider.importNotesBackup(content);
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(success
-                    ? "Notes successfully imported and restored!"
-                    : "Invalid backup file format."),
-              ),
+            AppSnackBar.show(
+              context,
+              message: success
+                  ? "Notes successfully imported and restored!"
+                  : "Invalid backup file format.",
+              isSuccess: success,
+              isError: !success,
+              icon: success ? Icons.settings_backup_restore_rounded : Icons.error_outline_rounded,
             );
           }
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Backup import failed: $e")),
+        AppSnackBar.show(
+          context,
+          message: "Backup import failed: $e",
+          isError: true,
         );
       }
     }
@@ -198,6 +206,34 @@ class SettingsState extends State<Settings> {
           ),
           const SizedBox(height: 12),
 
+          // --- REMINDERS SECTION ---
+          Card(
+            elevation: 0,
+            color: colorScheme.surfaceContainerHighest.withAlpha(80),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: ListTile(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const RemindersScreen(),
+                  ),
+                );
+              },
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              leading: Icon(Icons.notifications_active_rounded, color: colorScheme.primary),
+              title: const Text('Reminders', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(
+                notesProvider.reminderNoteModels.isEmpty
+                    ? 'No active reminders scheduled'
+                    : '${notesProvider.reminderNoteModels.length} active scheduled reminder(s)',
+              ),
+              trailing: Icon(Icons.chevron_right_rounded, color: colorScheme.onSurfaceVariant),
+            ),
+          ),
+          const SizedBox(height: 12),
+
           // --- APP-WIDE BIOMETRIC LOCK SECTION (PRESERVED) ---
           Consumer<AuthenticationProvider>(
             builder: (context, authProvider, _) {
@@ -218,8 +254,11 @@ class SettingsState extends State<Settings> {
 
                       if (biometrics.isEmpty && !isSupported) {
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("No security set! Please add a PIN or Fingerprint in Device Settings.")),
+                          AppSnackBar.show(
+                            context,
+                            message: "No security set! Please add a PIN or Fingerprint in Device Settings.",
+                            icon: Icons.security_rounded,
+                            isError: true,
                           );
                         }
                         return;

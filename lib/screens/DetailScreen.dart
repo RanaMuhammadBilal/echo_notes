@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:intl/intl.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -18,6 +19,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'package:echo_notes/AuthenticationServices.dart';
 import 'package:echo_notes/provider_notes.dart';
+import 'package:echo_notes/utils/snackbar_utils.dart';
 
 class _PdfLineOp {
   final String text;
@@ -340,18 +342,21 @@ class _DetailScreenState extends State<DetailScreen> {
     );
 
     if (scheduled.isBefore(DateTime.now())) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a future date and time.')),
+      AppSnackBar.show(
+        context,
+        message: 'Please select a future date and time.',
+        isError: true,
       );
       return;
     }
 
     provider.setNoteReminder(noteKey, scheduled);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-            'Reminder set for ${DateFormat('d MMM y, h:mm a').format(scheduled)}'),
-      ),
+    AppSnackBar.show(
+      context,
+      message:
+          'Reminder set for ${DateFormat('d MMM y, h:mm a').format(scheduled)}',
+      isSuccess: true,
+      icon: Icons.notifications_active_rounded,
     );
   }
 
@@ -724,8 +729,10 @@ class _DetailScreenState extends State<DetailScreen> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error exporting PDF: $e")),
+        AppSnackBar.show(
+          context,
+          message: "Error exporting PDF: $e",
+          isError: true,
         );
       }
     }
@@ -792,13 +799,33 @@ class _DetailScreenState extends State<DetailScreen> {
           IconButton(
             onPressed: () async {
               final auth = AuthenticationServices();
+              List<BiometricType> biometrics =
+                  await auth.localAuthentication.getAvailableBiometrics();
+              bool isSupported =
+                  await auth.localAuthentication.isDeviceSupported();
+
+              if (biometrics.isEmpty && !isSupported) {
+                if (mounted) {
+                  AppSnackBar.show(
+                    context,
+                    message:
+                        "No security set! Please add a PIN or Fingerprint in Device Settings.",
+                    icon: Icons.security_rounded,
+                    isError: true,
+                  );
+                }
+                return;
+              }
+
               bool isSecure = await auth.isDeviceSecure();
               if (!isSecure) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text(
-                            'Please set up a PIN/Biometrics on your device first.')),
+                  AppSnackBar.show(
+                    context,
+                    message:
+                        "No security set! Please add a PIN or Fingerprint in Device Settings.",
+                    icon: Icons.security_rounded,
+                    isError: true,
                   );
                 }
                 return;
@@ -806,12 +833,15 @@ class _DetailScreenState extends State<DetailScreen> {
               bool success = await auth.authenticateLocally();
               if (success && mounted) {
                 provider.toggleNoteLock(widget.index);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(currentNote.isLocked
-                        ? 'Note Unlocked'
-                        : 'Note Locked with Security'),
-                  ),
+                AppSnackBar.show(
+                  context,
+                  message: currentNote.isLocked
+                      ? 'Note Unlocked'
+                      : 'Note Locked with Security',
+                  isSuccess: true,
+                  icon: currentNote.isLocked
+                      ? Icons.lock_open_rounded
+                      : Icons.lock_rounded,
                 );
               }
             },

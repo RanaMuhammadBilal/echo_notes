@@ -6,6 +6,7 @@ import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:echo_notes/provider_notes.dart';
+import 'package:echo_notes/utils/snackbar_utils.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -115,14 +116,11 @@ class _AddNoteState extends State<AddNote> {
   void _saveNote() {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please enter a title for your note'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Theme.of(context).colorScheme.error,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          margin: const EdgeInsets.all(16),
-        ),
+      AppSnackBar.show(
+        context,
+        message: 'Please enter a title for your note',
+        icon: Icons.title_rounded,
+        isError: true,
       );
       return;
     }

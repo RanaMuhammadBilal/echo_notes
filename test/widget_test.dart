@@ -8,6 +8,7 @@ import 'package:echo_notes/screens/AnimationControlScreen.dart';
 import 'package:echo_notes/screens/DetailScreen.dart';
 import 'package:echo_notes/screens/HomePage.dart';
 import 'package:echo_notes/screens/SearchScreen.dart';
+import 'package:echo_notes/screens/RemindersScreen.dart';
 import 'package:echo_notes/screens/Settings.dart';
 import 'package:echo_notes/screens/VoiceNote.dart';
 import 'package:echo_notes/services/backup_service.dart';
@@ -333,6 +334,15 @@ void main() {
       expect(find.byType(TextField), findsOneWidget);
       expect(find.byType(AudioWaveformVisualizer), findsOneWidget);
       expect(find.byType(PulsingMicButton), findsOneWidget);
+    });
+
+    testWidgets('RemindersScreen renders empty state when no reminders are scheduled',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(buildTestApp(const RemindersScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Scheduled Reminders'), findsOneWidget);
+      expect(find.text('No Active Reminders'), findsOneWidget);
     });
   });
 }

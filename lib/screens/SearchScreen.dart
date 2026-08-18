@@ -4,8 +4,10 @@ import 'package:echo_notes/AuthenticationServices.dart';
 import 'package:echo_notes/models/note_model.dart';
 import 'package:echo_notes/screens/DetailScreen.dart';
 import 'package:flutter/material.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:echo_notes/provider_notes.dart';
+import 'package:echo_notes/utils/snackbar_utils.dart';
 import 'EditNote.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -27,14 +29,32 @@ class SearchScreenState extends State<SearchScreen> {
 
   Future<bool> _authenticateLockedNote(BuildContext context) async {
     final auth = AuthenticationServices();
+    List<BiometricType> biometrics =
+        await auth.localAuthentication.getAvailableBiometrics();
+    bool isSupported = await auth.localAuthentication.isDeviceSupported();
+
+    if (biometrics.isEmpty && !isSupported) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          message:
+              "No security set! Please add a PIN or Fingerprint in Device Settings.",
+          icon: Icons.security_rounded,
+          isError: true,
+        );
+      }
+      return false;
+    }
+
     bool isSecure = await auth.isDeviceSecure();
     if (!isSecure) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                "Locked Note: Please set a PIN or Fingerprint in Device Settings to view."),
-          ),
+        AppSnackBar.show(
+          context,
+          message:
+              "No security set! Please add a PIN or Fingerprint in Device Settings.",
+          icon: Icons.security_rounded,
+          isError: true,
         );
       }
       return false;
@@ -382,8 +402,11 @@ class SearchScreenState extends State<SearchScreen> {
                 provider.deleteNote(noteKey);
                 Navigator.pop(context);
                 setState(() {});
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Note deleted')));
+                AppSnackBar.show(
+                  context,
+                  message: 'Note moved to Trash',
+                  icon: Icons.delete_outline_rounded,
+                );
               },
             ),
           ],

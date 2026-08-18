@@ -2,6 +2,7 @@ import 'package:echo_notes/models/note_model.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:echo_notes/provider_notes.dart';
+import 'package:echo_notes/utils/snackbar_utils.dart';
 
 class TrashScreen extends StatefulWidget {
   const TrashScreen({super.key});
@@ -66,6 +67,7 @@ class _TrashScreenState extends State<TrashScreen> {
             IconButton(
               icon: const Icon(Icons.restore_page_rounded, color: Colors.green),
               onPressed: () {
+                final count = _selectedKeys.length;
                 for (var key in _selectedKeys) {
                   provider.restoreNote(key);
                 }
@@ -73,6 +75,12 @@ class _TrashScreenState extends State<TrashScreen> {
                   _selectedKeys.clear();
                   _isSelectionMode = false;
                 });
+                AppSnackBar.show(
+                  context,
+                  message: '$count note(s) restored',
+                  isSuccess: true,
+                  icon: Icons.restore_rounded,
+                );
               },
             ),
             IconButton(
@@ -186,7 +194,15 @@ class _TrashScreenState extends State<TrashScreen> {
                           ),
                           if (!_isSelectionMode) ...[
                             IconButton(
-                              onPressed: () => provider.restoreNote(noteKey),
+                              onPressed: () {
+                                provider.restoreNote(noteKey);
+                                AppSnackBar.show(
+                                  context,
+                                  message: 'Note restored',
+                                  isSuccess: true,
+                                  icon: Icons.restore_rounded,
+                                );
+                              },
                               icon: const Icon(Icons.restore_rounded,
                                   color: Colors.green),
                             ),

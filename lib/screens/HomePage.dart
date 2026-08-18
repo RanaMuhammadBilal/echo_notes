@@ -11,7 +11,9 @@ import 'package:echo_notes/screens/Settings.dart';
 import 'package:echo_notes/screens/VoiceNote.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
+import 'package:echo_notes/utils/snackbar_utils.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -48,14 +50,32 @@ class _HomePageState extends State<HomePage> {
 
   Future<bool> _authenticateLockedNote(BuildContext context) async {
     final auth = AuthenticationServices();
+    List<BiometricType> biometrics =
+        await auth.localAuthentication.getAvailableBiometrics();
+    bool isSupported = await auth.localAuthentication.isDeviceSupported();
+
+    if (biometrics.isEmpty && !isSupported) {
+      if (mounted) {
+        AppSnackBar.show(
+          context,
+          message:
+              "No security set! Please add a PIN or Fingerprint in Device Settings.",
+          icon: Icons.security_rounded,
+          isError: true,
+        );
+      }
+      return false;
+    }
+
     bool isSecure = await auth.isDeviceSecure();
     if (!isSecure) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                "Locked Note: Please set a PIN or Fingerprint in Device Settings to view."),
-          ),
+        AppSnackBar.show(
+          context,
+          message:
+              "No security set! Please add a PIN or Fingerprint in Device Settings.",
+          icon: Icons.security_rounded,
+          isError: true,
         );
       }
       return false;
@@ -81,8 +101,11 @@ class _HomePageState extends State<HomePage> {
                 setState(() => selectedFolder = "All");
               }
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('"$categoryName" removed.')));
+              AppSnackBar.show(
+                context,
+                message: '"$categoryName" category removed.',
+                icon: Icons.folder_delete_rounded,
+              );
             },
             child: const Text('Delete',
                 style: TextStyle(
@@ -517,12 +540,16 @@ class _HomePageState extends State<HomePage> {
         IconButton(
           icon: const Icon(Icons.delete_sweep_outlined, color: Colors.red),
           onPressed: () {
+            final count = selectedNoteKeys.length;
             for (var key in selectedNoteKeys) {
               provider.deleteNote(key);
             }
             _exitSelectionMode();
-            ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Moved to Trash')));
+            AppSnackBar.show(
+              context,
+              message: '$count note(s) moved to Trash',
+              icon: Icons.delete_outline_rounded,
+            );
           },
         )
       ];
@@ -1045,14 +1072,33 @@ class _HomePageState extends State<HomePage> {
                 onTap: () async {
                   Navigator.pop(context);
                   final auth = AuthenticationServices();
+                  List<BiometricType> biometrics =
+                      await auth.localAuthentication.getAvailableBiometrics();
+                  bool isSupported =
+                      await auth.localAuthentication.isDeviceSupported();
+
+                  if (biometrics.isEmpty && !isSupported) {
+                    if (context.mounted) {
+                      AppSnackBar.show(
+                        context,
+                        message:
+                            "No security set! Please add a PIN or Fingerprint in Device Settings.",
+                        icon: Icons.security_rounded,
+                        isError: true,
+                      );
+                    }
+                    return;
+                  }
+
                   bool isSecure = await auth.isDeviceSecure();
                   if (!isSecure) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              'Please set up a PIN/Biometrics on your device first.'),
-                        ),
+                      AppSnackBar.show(
+                        context,
+                        message:
+                            "No security set! Please add a PIN or Fingerprint in Device Settings.",
+                        icon: Icons.security_rounded,
+                        isError: true,
                       );
                     }
                     return;
@@ -1061,12 +1107,15 @@ class _HomePageState extends State<HomePage> {
                   if (success) {
                     provider.toggleNoteLock(noteKey);
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(note.isLocked
-                              ? 'Note Unlocked'
-                              : 'Note Locked with Security'),
-                        ),
+                      AppSnackBar.show(
+                        context,
+                        message: note.isLocked
+                            ? 'Note Unlocked'
+                            : 'Note Locked with Security',
+                        isSuccess: true,
+                        icon: note.isLocked
+                            ? Icons.lock_open_rounded
+                            : Icons.lock_rounded,
                       );
                     }
                   }

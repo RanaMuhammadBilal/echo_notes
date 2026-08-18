@@ -77,6 +77,14 @@ class NotesProvider extends ChangeNotifier {
     return notes.map((map) => NoteModel.fromMap(map['key'], map)).toList();
   }
 
+  /// Returns typed NoteModel notes list that have scheduled reminders
+  List<NoteModel> get reminderNoteModels {
+    return notes
+        .where((n) => n['reminderDateTime'] != null)
+        .map((n) => NoteModel.fromMap(n['key'], n))
+        .toList();
+  }
+
   // --- 2. TRASHED NOTES GETTER ---
   List<Map<String, dynamic>> get trashedNotes {
     return _notes.where((n) => n['isDeleted'] == true).toList();
