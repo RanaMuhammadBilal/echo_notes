@@ -1,18 +1,21 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:echo_notes/models/note_model.dart';
+
 import 'package:echo_notes/screens/EditNote.dart';
+import 'package:echo_notes/services/backup_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
-import 'package:flutter_quill/quill_delta.dart';
-import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
-import 'package:flutter_quill_to_pdf/flutter_quill_to_pdf.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../AuthenticationServices.dart';
 import '../provider_notes.dart';
 
 class DetailScreen extends StatefulWidget {
@@ -23,7 +26,7 @@ class DetailScreen extends StatefulWidget {
     required this.index,
     required this.titleNote,
     required this.contentNote,
-    required this.timestamp
+    required this.timestamp,
   });
 
   @override
@@ -41,65 +44,66 @@ class _DetailScreenState extends State<DetailScreen> {
   bool _isSpeaking = false;
   bool _isPaused = false;
 
-  // Tracking offsets for precise highlighting
   int _lastOffset = 0;
-  int _lastEndOffset = 0;    //  Remembers the end of the word
+  int _lastEndOffset = 0;
   int _globalOffset = 0;
-
 
   @override
   void initState() {
     super.initState();
     _initTtsHandlers();
-    _setupQuillController();
+    _setupQuillController(widget.contentNote);
   }
 
   void _initTtsHandlers() {
     flutterTts.setLanguage("en-US");
 
     flutterTts.setStartHandler(() {
-      setState(() {
-        _isSpeaking = true;
-        _isPaused = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSpeaking = true;
+          _isPaused = false;
+        });
+      }
     });
 
     flutterTts.setCompletionHandler(() {
-      _resetTtsUI();
+      if (mounted) _resetTtsUI();
     });
 
     flutterTts.setPauseHandler(() {
-      setState(() {
-        _isSpeaking = false;
-        _isPaused = true;
-      });
-      // ✅ Keep the word highlighted even while paused
-      _controller.updateSelection(
-        TextSelection(baseOffset: _lastOffset, extentOffset: _lastEndOffset),
-        ChangeSource.local,
-      );
+      if (mounted) {
+        setState(() {
+          _isSpeaking = false;
+          _isPaused = true;
+        });
+        _controller.updateSelection(
+          TextSelection(baseOffset: _lastOffset, extentOffset: _lastEndOffset),
+          ChangeSource.local,
+        );
+      }
     });
 
     flutterTts.setContinueHandler(() {
-      setState(() {
-        _isSpeaking = true;
-        _isPaused = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSpeaking = true;
+          _isPaused = false;
+        });
+      }
     });
 
-    flutterTts.setErrorHandler((msg) => _resetTtsUI());
-
-    flutterTts.setCancelHandler(() {
-      // Manual stops are handled by _stopTts, so we ignore system cancels
+    flutterTts.setErrorHandler((msg) {
+      if (mounted) _resetTtsUI();
     });
 
     flutterTts.setProgressHandler((String text, int start, int end, String word) {
-      if (_isSpeaking) {
+      if (_isSpeaking && mounted) {
         int absoluteStart = _globalOffset + start;
         int absoluteEnd = _globalOffset + end;
 
         _lastOffset = absoluteStart;
-        _lastEndOffset = absoluteEnd; // ✅ Store the end position
+        _lastEndOffset = absoluteEnd;
 
         setState(() {
           _controller.updateSelection(
@@ -125,9 +129,9 @@ class _DetailScreenState extends State<DetailScreen> {
     });
   }
 
-  void _setupQuillController() {
+  void _setupQuillController(String content) {
     try {
-      final decodedData = jsonDecode(widget.contentNote);
+      final decodedData = jsonDecode(content);
       _controller = QuillController(
         document: Document.fromJson(decodedData),
         selection: const TextSelection.collapsed(offset: 0),
@@ -135,20 +139,43 @@ class _DetailScreenState extends State<DetailScreen> {
       );
     } catch (e) {
       _controller = QuillController(
-        document: Document()..insert(0, widget.contentNote),
+        document: Document()..insert(0, content),
         selection: const TextSelection.collapsed(offset: 0),
         readOnly: true,
       );
     }
   }
 
-  // --- TTS ACTIONS ---
+  void _updateQuillDocumentIfChanged(String newContent) {
+    try {
+      final newDecoded = jsonDecode(newContent);
+      final newDoc = Document.fromJson(newDecoded);
+      if (_controller.document.toPlainText() != newDoc.toPlainText()) {
+        setState(() {
+          _controller = QuillController(
+            document: newDoc,
+            selection: const TextSelection.collapsed(offset: 0),
+            readOnly: true,
+          );
+        });
+      }
+    } catch (_) {
+      if (_controller.document.toPlainText() != newContent) {
+        setState(() {
+          _controller = QuillController(
+            document: Document()..insert(0, newContent),
+            selection: const TextSelection.collapsed(offset: 0),
+            readOnly: true,
+          );
+        });
+      }
+    }
+  }
 
   void _handleSpeakTap() async {
     String plainText = _controller.document.toPlainText().trim();
     if (plainText.isEmpty) return;
 
-    // Keep the editor focused so the highlight is visible
     _editorFocusNode.requestFocus();
 
     if (_isSpeaking) {
@@ -177,10 +204,15 @@ class _DetailScreenState extends State<DetailScreen> {
 
   void _showSpeedMenu() async {
     final colorScheme = Theme.of(context).colorScheme;
-    final RenderBox renderBox = _menuKey.currentContext?.findRenderObject() as RenderBox;
+    final RenderBox? renderBox =
+        _menuKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
     final Offset offset = renderBox.localToGlobal(Offset.zero);
     final RelativeRect position = RelativeRect.fromLTRB(
-        offset.dx, offset.dy + renderBox.size.height, offset.dx + renderBox.size.width, 0);
+        offset.dx,
+        offset.dy + renderBox.size.height,
+        offset.dx + renderBox.size.width,
+        0);
 
     final double? selected = await showMenu<double>(
       context: context,
@@ -200,32 +232,41 @@ class _DetailScreenState extends State<DetailScreen> {
     }
   }
 
-  // --- Utility Logic (Stats/PDF) ---
-
   void _showStatistics() {
     final String text = _controller.document.toPlainText();
     final int characters = text.length;
-    final int words = text.isEmpty ? 0 : text.trim().split(RegExp(r'\s+')).length;
+    final int words =
+        text.trim().isEmpty ? 0 : text.trim().split(RegExp(r'\s+')).length;
     final int readTime = (words / 200).ceil();
 
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+            Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10))),
             const SizedBox(height: 20),
-            const Text("Note Insights", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const Text("Note Insights",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildStatItem(Icons.text_fields_rounded, "Words", words.toString()),
-                _buildStatItem(Icons.numbers_rounded, "Chars", characters.toString()),
-                _buildStatItem(Icons.timer_outlined, "Read", "$readTime min"),
+                _buildStatItem(
+                    Icons.text_fields_rounded, "Words", words.toString()),
+                _buildStatItem(
+                    Icons.numbers_rounded, "Chars", characters.toString()),
+                _buildStatItem(
+                    Icons.timer_outlined, "Read", "$readTime min"),
               ],
             ),
             const SizedBox(height: 16),
@@ -240,14 +281,83 @@ class _DetailScreenState extends State<DetailScreen> {
       children: [
         Icon(icon, color: Theme.of(context).colorScheme.primary),
         const SizedBox(height: 8),
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(value,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
       ],
     );
   }
 
-  Future<void> _exportToPdf() async {
-    // 1. IMMEDIATELY SHOW A LOADING SPINNER
+  // --- SET REMINDER DIALOG ---
+  Future<void> _pickReminderDateTime(
+      BuildContext context, dynamic noteKey, String? existingReminder) async {
+    final provider = context.read<NotesProvider>();
+    DateTime initial = DateTime.now().add(const Duration(hours: 1));
+    if (existingReminder != null) {
+      try {
+        initial = DateTime.parse(existingReminder);
+      } catch (_) {}
+    }
+
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(DateTime.now())
+          ? DateTime.now().add(const Duration(minutes: 5))
+          : initial,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+
+    if (pickedDate == null || !mounted) return;
+
+    final TimeOfDay? pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+
+    if (pickedTime == null || !mounted) return;
+
+    final DateTime scheduled = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+
+    if (scheduled.isBefore(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a future date and time.')),
+      );
+      return;
+    }
+
+    provider.setNoteReminder(noteKey, scheduled);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+            'Reminder set for ${DateFormat('d MMM y, h:mm a').format(scheduled)}'),
+      ),
+    );
+  }
+
+  // --- MARKDOWN EXPORT / SHARE ---
+  Future<void> _exportToMarkdown(
+      String title, String content, String timestamp, String? folder) async {
+    final mdString = BackupService.convertToMarkdown(
+      title: title,
+      content: content,
+      timestamp: timestamp,
+      folder: folder,
+    );
+
+    await Share.share(
+      mdString,
+      subject: '$title.md',
+    );
+  }
+
+  Future<void> _exportToPdf(String title, String timestamp) async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -255,7 +365,6 @@ class _DetailScreenState extends State<DetailScreen> {
     );
 
     try {
-      // 2. FETCH ALL FONTS (Now including Italics for rich text!)
       final fonts = await Future.wait([
         PdfGoogleFonts.openSansRegular(),
         PdfGoogleFonts.openSansBold(),
@@ -279,18 +388,20 @@ class _DetailScreenState extends State<DetailScreen> {
         ),
       );
 
-      // 3. Define Header Styles
-      final titleStyle = pw.TextStyle(font: boldFont, fontFallback: [emojiFont], fontSize: 24);
-      final timestampStyle = pw.TextStyle(font: baseFont, fontFallback: [emojiFont], fontSize: 11, color: PdfColors.grey700);
+      final titleStyle =
+          pw.TextStyle(font: boldFont, fontFallback: [emojiFont], fontSize: 24);
+      final timestampStyle = pw.TextStyle(
+          font: baseFont,
+          fontFallback: [emojiFont],
+          fontSize: 11,
+          color: PdfColors.grey700);
 
-      // 4. RICH TEXT PARSER SETUP
       List<pw.Widget> pdfContent = [];
       List<pw.TextSpan> currentParagraphSpans = [];
 
-      // Flushes accumulated inline text spans into a solid paragraph
       void flushParagraph() {
         if (currentParagraphSpans.isEmpty) {
-          pdfContent.add(pw.SizedBox(height: 12)); // Empty space for pure newlines
+          pdfContent.add(pw.SizedBox(height: 12));
         } else {
           pdfContent.add(
             pw.Padding(
@@ -304,17 +415,14 @@ class _DetailScreenState extends State<DetailScreen> {
         }
       }
 
-      // Processes text chunks and applies the correct font weight/style
       void processTextOp(String text, Map<String, dynamic>? attributes) {
         final sanitizeRegex = RegExp(r'[\uFE0F\u200D]');
         String sanitized = text.replaceAll(sanitizeRegex, '');
         final parts = sanitized.split('\n');
 
-        // Check attributes applied to this specific chunk of text
         bool isBold = attributes?['bold'] == true;
         bool isItalic = attributes?['italic'] == true;
 
-        // Determine the exact font combination
         pw.Font targetFont = baseFont;
         if (isBold && isItalic) {
           targetFont = boldItalicFont;
@@ -331,7 +439,6 @@ class _DetailScreenState extends State<DetailScreen> {
           lineSpacing: 1.5,
         );
 
-        // Break text by newlines so paragraphs form naturally
         for (int i = 0; i < parts.length; i++) {
           if (parts[i].isNotEmpty) {
             currentParagraphSpans.add(pw.TextSpan(
@@ -340,20 +447,18 @@ class _DetailScreenState extends State<DetailScreen> {
             ));
           }
           if (i < parts.length - 1) {
-            flushParagraph(); // A newline was found, flush the current paragraph
+            flushParagraph();
           }
         }
       }
 
-      // 5. READ DELTA TO FIND FORMATTED TEXT AND IMAGES
       final delta = _controller.document.toDelta();
 
       for (final op in delta.toList()) {
         if (op.data is String) {
           processTextOp(op.data as String, op.attributes);
-        }
-        else if (op.data is Map && (op.data as Map).containsKey('image')) {
-          flushParagraph(); // Flush any text BEFORE injecting the image
+        } else if (op.data is Map && (op.data as Map).containsKey('image')) {
+          flushParagraph();
 
           final String imageSource = (op.data as Map)['image'].toString();
           Uint8List? imageBytes;
@@ -388,12 +493,11 @@ class _DetailScreenState extends State<DetailScreen> {
         }
       }
 
-      flushParagraph(); // Flush any remaining text at the end of the document
+      flushParagraph();
 
-      String rawTitle = widget.titleNote.replaceAll(RegExp(r'[\uFE0F\u200D]'), '');
-      String rawTimestamp = widget.timestamp.replaceAll(RegExp(r'[\uFE0F\u200D]'), '');
+      String rawTitle = title.replaceAll(RegExp(r'[\uFE0F\u200D]'), '');
+      String rawTimestamp = timestamp.replaceAll(RegExp(r'[\uFE0F\u200D]'), '');
 
-      // 6. Build Document
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
@@ -412,16 +516,14 @@ class _DetailScreenState extends State<DetailScreen> {
         ),
       );
 
-      // 7. DISMISS LOADING DIALOG BEFORE SHOWING PDF
       if (mounted) {
         Navigator.pop(context);
       }
 
       await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save(),
-        name: '${widget.titleNote}.pdf',
+        name: '$title.pdf',
       );
-
     } catch (e) {
       if (mounted) {
         Navigator.pop(context);
@@ -437,88 +539,185 @@ class _DetailScreenState extends State<DetailScreen> {
     _controller.dispose();
     flutterTts.stop();
     _editorFocusNode.dispose();
+    _pageScrollController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    bool _showBorder = context.watch<NotesProvider>().showNoteBorder;
+    final provider = context.watch<NotesProvider>();
+
+    // Fetch reactive live note data by key
+    final allNotes = [...provider.notes, ...provider.trashedNotes];
+    final liveNoteMap = allNotes.firstWhere(
+      (n) => n['key'] == widget.index,
+      orElse: () => {
+        'title': widget.titleNote,
+        'content': widget.contentNote,
+        'timestamp': widget.timestamp,
+        'folder': 'General',
+        'isLocked': false,
+      },
+    );
+
+    final NoteModel currentNote = NoteModel.fromMap(widget.index, liveNoteMap);
+    _updateQuillDocumentIfChanged(currentNote.content);
+    bool _showBorder = provider.showNoteBorder;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Notes', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(currentNote.folder, style: const TextStyle(fontWeight: FontWeight.bold)),
         scrolledUnderElevation: 0,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         actions: [
+          // Edit Button
           IconButton(
             onPressed: () {
-              Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => EditNote(index: widget.index, title: widget.titleNote, content: widget.contentNote))
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => EditNote(
+                    index: widget.index,
+                    title: currentNote.title,
+                    content: currentNote.content,
+                  ),
+                ),
               );
             },
             icon: Icon(Icons.edit_outlined, color: colorScheme.primary),
+            tooltip: 'Edit Note',
           ),
 
-          // ✅ PLAY / PAUSE
+          // Individual Note Lock Toggle Button
+          IconButton(
+            onPressed: () async {
+              final auth = AuthenticationServices();
+              bool isSecure = await auth.isDeviceSecure();
+              if (!isSecure) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text(
+                            'Please set up a PIN/Biometrics on your device first.')),
+                  );
+                }
+                return;
+              }
+              bool success = await auth.authenticateLocally();
+              if (success && mounted) {
+                provider.toggleNoteLock(widget.index);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(currentNote.isLocked
+                        ? 'Note Unlocked'
+                        : 'Note Locked with Security'),
+                  ),
+                );
+              }
+            },
+            icon: Icon(
+              currentNote.isLocked
+                  ? Icons.lock_rounded
+                  : Icons.lock_open_rounded,
+              color: currentNote.isLocked ? Colors.orange : colorScheme.primary,
+            ),
+            tooltip: currentNote.isLocked ? 'Unlock Note' : 'Lock Note',
+          ),
+
+          // TTS Play/Pause Button
           IconButton(
             key: _menuKey,
             onPressed: _handleSpeakTap,
             onLongPress: _showSpeedMenu,
             icon: Icon(
-              _isSpeaking ? Icons.pause_circle_filled : (_isPaused ? Icons.play_circle_fill : Icons.record_voice_over),
+              _isSpeaking
+                  ? Icons.pause_circle_filled
+                  : (_isPaused
+                      ? Icons.play_circle_fill
+                      : Icons.record_voice_over),
               color: colorScheme.primary,
             ),
           ),
 
-          // ✅ STOP
           if (_isSpeaking || _isPaused)
             IconButton(
               onPressed: _stopTts,
               icon: const Icon(Icons.stop_circle_outlined, color: Colors.red),
             ),
 
+          // More Options Popup Menu
           PopupMenuButton<String>(
             color: colorScheme.surface,
             tooltip: "More Options",
             icon: Icon(Icons.more_vert_rounded, color: colorScheme.primary),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             onSelected: (value) {
-              if (value == 'stats') _showStatistics();
-              else if (value == 'pdf') _exportToPdf();
-              else if (value == 'border') context.read<NotesProvider>().toggleNoteBorder();
+              if (value == 'stats') {
+                _showStatistics();
+              } else if (value == 'pdf') {
+                _exportToPdf(currentNote.title, currentNote.timestamp);
+              } else if (value == 'markdown') {
+                _exportToMarkdown(currentNote.title, currentNote.content,
+                    currentNote.timestamp, currentNote.folder);
+              } else if (value == 'reminder') {
+                _pickReminderDateTime(
+                    context, widget.index, currentNote.reminderDateTime);
+              } else if (value == 'border') {
+                context.read<NotesProvider>().toggleNoteBorder();
+              }
             },
             itemBuilder: (BuildContext context) {
               return [
-                // 1. NOTE INSIGHTS
+                PopupMenuItem(
+                  value: 'reminder',
+                  child: Row(
+                    children: [
+                      Icon(Icons.notification_add_outlined,
+                          color: colorScheme.onSurfaceVariant, size: 20),
+                      const SizedBox(width: 12),
+                      Text(currentNote.reminderDateTime != null
+                          ? 'Change Reminder'
+                          : 'Set Reminder'),
+                    ],
+                  ),
+                ),
                 PopupMenuItem(
                   value: 'stats',
                   child: Row(
                     children: [
-                      Icon(Icons.bar_chart_rounded, color: colorScheme.onSurfaceVariant, size: 20),
+                      Icon(Icons.bar_chart_rounded,
+                          color: colorScheme.onSurfaceVariant, size: 20),
                       const SizedBox(width: 12),
                       const Text('Note Insights'),
                     ],
                   ),
                 ),
-
-                // 2. EXPORT TO PDF
+                PopupMenuItem(
+                  value: 'markdown',
+                  child: Row(
+                    children: [
+                      Icon(Icons.description_outlined,
+                          color: colorScheme.onSurfaceVariant, size: 20),
+                      const SizedBox(width: 12),
+                      const Text('Share as Markdown'),
+                    ],
+                  ),
+                ),
                 PopupMenuItem(
                   value: 'pdf',
                   child: Row(
                     children: [
-                      Icon(Icons.picture_as_pdf_outlined, color: colorScheme.onSurfaceVariant, size: 20),
+                      Icon(Icons.picture_as_pdf_outlined,
+                          color: colorScheme.onSurfaceVariant, size: 20),
                       const SizedBox(width: 12),
                       const Text('Export to PDF'),
                     ],
                   ),
                 ),
-
-                const PopupMenuDivider(), // Optional: adds a thin line for visual separation
-
-                // 3. TOGGLE BORDER
+                const PopupMenuDivider(),
                 PopupMenuItem(
                   value: 'border',
                   child: Row(
@@ -541,7 +740,6 @@ class _DetailScreenState extends State<DetailScreen> {
       body: CustomScrollView(
         controller: _pageScrollController,
         slivers: [
-          // 1. TITLE & TIMESTAMP
           SliverToBoxAdapter(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -549,32 +747,61 @@ class _DetailScreenState extends State<DetailScreen> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
                   child: SelectableText(
-                    widget.titleNote,
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colorScheme.onSurface, letterSpacing: -0.5),
+                    currentNote.title,
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface,
+                      letterSpacing: -0.5,
+                    ),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                  child: Row(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 12,
+                    runSpacing: 6,
                     children: [
-                      Icon(Icons.access_time_rounded, size: 14, color: colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 6),
-                      Text(widget.timestamp, style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.access_time_rounded,
+                              size: 14, color: colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 6),
+                          Text(currentNote.timestamp,
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: colorScheme.onSurfaceVariant)),
+                        ],
+                      ),
+                      if (currentNote.reminderDateTime != null)
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          avatar: const Icon(Icons.notifications_active_rounded,
+                              size: 14, color: Colors.amber),
+                          label: Text(
+                            DateFormat('d MMM, h:mm a').format(
+                              DateTime.parse(currentNote.reminderDateTime!),
+                            ),
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          onDeleted: () {
+                            provider.setNoteReminder(widget.index, null);
+                          },
+                        ),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-
-          // 2. DIVIDER
-           SliverToBoxAdapter(
-            child: _showBorder ? SizedBox.shrink() : Divider(height: 1, indent: 20, endIndent: 20),
+          SliverToBoxAdapter(
+            child: _showBorder
+                ? const SizedBox.shrink()
+                : const Divider(height: 1, indent: 20, endIndent: 20),
           ),
-
           const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
-          // 3. EDITOR AREA
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -582,22 +809,21 @@ class _DetailScreenState extends State<DetailScreen> {
                 width: double.infinity,
                 decoration: _showBorder
                     ? BoxDecoration(
-                  color: colorScheme.surface,
-                  border: Border.all(color: colorScheme.outlineVariant),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(15),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    )
-                  ],
-                )
+                        color: colorScheme.surface,
+                        border: Border.all(color: colorScheme.outlineVariant),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(15),
+                            blurRadius: 6,
+                            offset: const Offset(0, 3),
+                          )
+                        ],
+                      )
                     : null,
                 clipBehavior: _showBorder ? Clip.hardEdge : Clip.none,
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    // Ensures the "page" is always at least 60% of the screen height
                     minHeight: MediaQuery.of(context).size.height * 0.7,
                   ),
                   child: Column(
@@ -606,29 +832,23 @@ class _DetailScreenState extends State<DetailScreen> {
                         padding: const EdgeInsets.all(10),
                         child: QuillEditor.basic(
                           controller: _controller,
-                          config: QuillEditorConfig(
-                            padding: const EdgeInsets.all(10),
-                            // ✅ THE FIX: Let the page scroll, not the editor
+                          config: const QuillEditorConfig(
+                            padding: EdgeInsets.all(10),
                             expands: false,
                             scrollable: false,
                             autoFocus: false,
                             showCursor: false,
                             enableInteractiveSelection: true,
-                            embedBuilders: FlutterQuillEmbeds.editorBuilders(),
                           ),
                         ),
                       ),
-                      // The 25% empty bottom space
-                      /*const SizedBox(height: 100),*/
                     ],
                   ),
                 ),
               ),
             ),
           ),
-
-          // 4. BOTTOM BUMPER SPACE
-          SliverToBoxAdapter(
+          const SliverToBoxAdapter(
             child: SizedBox(height: 50),
           ),
         ],
@@ -640,7 +860,10 @@ class _DetailScreenState extends State<DetailScreen> {
     bool isSelected = _currentSpeed == value;
     return PopupMenuItem(
       value: value,
-      child: Text(label, style: TextStyle(color: isSelected ? Colors.blue : null, fontWeight: isSelected ? FontWeight.bold : null)),
+      child: Text(label,
+          style: TextStyle(
+              color: isSelected ? Colors.blue : null,
+              fontWeight: isSelected ? FontWeight.bold : null)),
     );
   }
 }

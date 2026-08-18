@@ -1,3 +1,4 @@
+import 'package:echo_notes/models/note_model.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:echo_notes/provider_notes.dart';
@@ -10,7 +11,6 @@ class TrashScreen extends StatefulWidget {
 }
 
 class _TrashScreenState extends State<TrashScreen> {
-  // Track selected keys
   final Set<dynamic> _selectedKeys = {};
   bool _isSelectionMode = false;
 
@@ -30,11 +30,10 @@ class _TrashScreenState extends State<TrashScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final provider = context.watch<NotesProvider>();
-    final trashedNotes = provider.trashedNotes;
+    final trashedNotes = provider.trashedNoteModels;
 
     return Scaffold(
       appBar: AppBar(
-        // Dynamic Title based on selection
         title: Text(
           _isSelectionMode ? '${_selectedKeys.length} Selected' : 'Recycle Bin',
           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -42,16 +41,15 @@ class _TrashScreenState extends State<TrashScreen> {
         centerTitle: true,
         leading: _isSelectionMode
             ? IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => setState(() {
-            _isSelectionMode = false;
-            _selectedKeys.clear();
-          }),
-        )
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(() {
+                  _isSelectionMode = false;
+                  _selectedKeys.clear();
+                }),
+              )
             : null,
         actions: [
           if (_isSelectionMode) ...[
-            // Select All Toggle
             IconButton(
               icon: const Icon(Icons.select_all_rounded),
               onPressed: () {
@@ -60,12 +58,11 @@ class _TrashScreenState extends State<TrashScreen> {
                     _selectedKeys.clear();
                     _isSelectionMode = false;
                   } else {
-                    _selectedKeys.addAll(trashedNotes.map((n) => n['key']));
+                    _selectedKeys.addAll(trashedNotes.map((n) => n.key));
                   }
                 });
               },
             ),
-            // Batch Restore
             IconButton(
               icon: const Icon(Icons.restore_page_rounded, color: Colors.green),
               onPressed: () {
@@ -78,13 +75,11 @@ class _TrashScreenState extends State<TrashScreen> {
                 });
               },
             ),
-            // Batch Delete
             IconButton(
               icon: const Icon(Icons.delete_forever_rounded, color: Colors.red),
               onPressed: () => _confirmBatchDelete(context, provider),
             ),
           ] else if (trashedNotes.isNotEmpty)
-          // Option to empty whole trash
             IconButton(
               icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent),
               onPressed: () => _confirmEmptyTrash(context, provider),
@@ -93,119 +88,144 @@ class _TrashScreenState extends State<TrashScreen> {
       ),
       body: trashedNotes.isEmpty
           ? Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.delete_outline, size: 80, color: colorScheme.onSurface.withAlpha(50)),
-            const SizedBox(height: 16),
-            Text('Trash is empty', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 18)),
-            const SizedBox(height: 8),
-            Text('Items are permanently deleted after 30 days',
-                style: TextStyle(color: colorScheme.onSurfaceVariant.withAlpha(150), fontSize: 12)),
-          ],
-        ),
-      )
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.delete_outline,
+                      size: 80, color: colorScheme.onSurface.withAlpha(50)),
+                  const SizedBox(height: 16),
+                  Text('Trash is empty',
+                      style: TextStyle(
+                          color: colorScheme.onSurfaceVariant, fontSize: 18)),
+                  const SizedBox(height: 8),
+                  Text('Items are permanently deleted after 30 days',
+                      style: TextStyle(
+                          color: colorScheme.onSurfaceVariant.withAlpha(150),
+                          fontSize: 12)),
+                ],
+              ),
+            )
           : ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: trashedNotes.length,
-        itemBuilder: (context, index) {
-          final note = trashedNotes[index];
-          final dynamic noteKey = note['key'];
-          final bool isSelected = _selectedKeys.contains(noteKey);
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: trashedNotes.length,
+              itemBuilder: (context, index) {
+                final NoteModel note = trashedNotes[index];
+                final dynamic noteKey = note.key;
+                final bool isSelected = _selectedKeys.contains(noteKey);
 
-          // Calculate days left
-          int daysLeft = 30;
-          if (note['deletedAt'] != null) {
-            final deletedDate = DateTime.parse(note['deletedAt']);
-            final daysPassed = DateTime.now().difference(deletedDate).inDays;
-            daysLeft = 30 - daysPassed;
-          }
+                int daysLeft = 30;
+                if (note.deletedAt != null) {
+                  try {
+                    final deletedDate = DateTime.parse(note.deletedAt!);
+                    final daysPassed =
+                        DateTime.now().difference(deletedDate).inDays;
+                    daysLeft = 30 - daysPassed;
+                    if (daysLeft < 0) daysLeft = 0;
+                  } catch (_) {}
+                }
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            child: InkWell(
-              onTap: _isSelectionMode ? () => _toggleSelection(noteKey) : null,
-              onLongPress: () => _toggleSelection(noteKey),
-              borderRadius: BorderRadius.circular(20),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? colorScheme.primaryContainer.withAlpha(150)
-                      : colorScheme.surfaceContainerHighest.withAlpha(80),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isSelected ? colorScheme.primary : Colors.red.withAlpha(50),
-                    width: isSelected ? 2 : 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    if (_isSelectionMode)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 16),
-                        child: Icon(
-                          isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-                          color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                return Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  child: InkWell(
+                    onTap: _isSelectionMode
+                        ? () => _toggleSelection(noteKey)
+                        : null,
+                    onLongPress: () => _toggleSelection(noteKey),
+                    borderRadius: BorderRadius.circular(20),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? colorScheme.primaryContainer.withAlpha(150)
+                            : colorScheme.surfaceContainerHighest.withAlpha(80),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected
+                              ? colorScheme.primary
+                              : Colors.red.withAlpha(50),
+                          width: isSelected ? 2 : 1,
                         ),
                       ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Text(
-                            note['title'],
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: colorScheme.onSurface
+                          if (_isSelectionMode)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 16),
+                              child: Icon(
+                                isSelected
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                color: isSelected
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurfaceVariant,
+                              ),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  note.title,
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: colorScheme.onSurface),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$daysLeft days left • Originally in ${note.folder}',
+                                  style: const TextStyle(
+                                      fontSize: 12, color: Colors.redAccent),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '$daysLeft days left • Originally in ${note['folder'] ?? "General"}',
-                            style: const TextStyle(fontSize: 12, color: Colors.redAccent),
-                          ),
+                          if (!_isSelectionMode) ...[
+                            IconButton(
+                              onPressed: () => provider.restoreNote(noteKey),
+                              icon: const Icon(Icons.restore_rounded,
+                                  color: Colors.green),
+                            ),
+                            IconButton(
+                              onPressed: () => _confirmPermanentDelete(
+                                  context, noteKey, provider),
+                              icon: const Icon(Icons.delete_forever_rounded,
+                                  color: Colors.red),
+                            ),
+                          ]
                         ],
                       ),
                     ),
-                    if (!_isSelectionMode) ...[
-                      IconButton(
-                        onPressed: () => provider.restoreNote(noteKey),
-                        icon: const Icon(Icons.restore_rounded, color: Colors.green),
-                      ),
-                      IconButton(
-                        onPressed: () => _confirmPermanentDelete(context, noteKey, provider),
-                        icon: const Icon(Icons.delete_forever_rounded, color: Colors.red),
-                      ),
-                    ]
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 
-  void _confirmPermanentDelete(BuildContext context, dynamic noteKey, NotesProvider provider) {
+  void _confirmPermanentDelete(
+      BuildContext context, dynamic noteKey, NotesProvider provider) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Forever?'),
         content: const Text('This note will be permanently removed.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
           TextButton(
             onPressed: () {
               provider.permanentlyDeleteNote(noteKey);
               Navigator.pop(context);
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: const Text('Delete',
+                style: TextStyle(
+                    color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -219,7 +239,9 @@ class _TrashScreenState extends State<TrashScreen> {
         title: Text('Delete ${_selectedKeys.length} notes?'),
         content: const Text('Selected notes will be permanently removed.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
           TextButton(
             onPressed: () {
               for (var key in _selectedKeys) {
@@ -231,7 +253,9 @@ class _TrashScreenState extends State<TrashScreen> {
               });
               Navigator.pop(context);
             },
-            child: const Text('Delete All', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: const Text('Delete All',
+                style: TextStyle(
+                    color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -243,15 +267,20 @@ class _TrashScreenState extends State<TrashScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Empty Trash?'),
-        content: const Text('All notes in the trash will be permanently deleted.'),
+        content: const Text(
+            'All notes in the trash will be permanently deleted.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
           TextButton(
             onPressed: () {
               provider.emptyTrash();
               Navigator.pop(context);
             },
-            child: const Text('Empty', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: const Text('Empty',
+                style: TextStyle(
+                    color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

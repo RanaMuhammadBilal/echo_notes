@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -6,18 +6,19 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:echo_notes/provider_notes.dart';
 
-class VoiceNote extends StatefulWidget{
+class VoiceNote extends StatefulWidget {
+  const VoiceNote({super.key});
+
   @override
   State<VoiceNote> createState() => _VoiceNoteState();
 }
 
 class _VoiceNoteState extends State<VoiceNote> {
-
-  SpeechToText speechToText = SpeechToText();
-  var liveText = '';
+  final SpeechToText speechToText = SpeechToText();
+  String liveText = '';
   String finalText = '';
-  var controller = TextEditingController();
-  DateFormat formattedDate = DateFormat('d MMMM, y, h:mm a');
+  final TextEditingController controller = TextEditingController();
+  final DateFormat formattedDate = DateFormat('d MMMM, y, h:mm a');
 
   @override
   void initState() {
@@ -25,121 +26,188 @@ class _VoiceNoteState extends State<VoiceNote> {
     initSpeech();
   }
 
+  @override
+  void dispose() {
+    if (speechToText.isListening) {
+      speechToText.stop();
+    }
+    controller.dispose();
+    super.dispose();
+  }
+
   Future<void> initSpeech() async {
-    await speechToText.initialize(
-      onStatus: (status) {
-        debugPrint("Status: $status");
-        setState(() {});
-      },
-      onError: (error) {
-        debugPrint("Error: $error");
-      },
-    );
+    try {
+      await speechToText.initialize(
+        onStatus: (status) {
+          debugPrint("Speech Status: $status");
+          if (mounted) setState(() {});
+        },
+        onError: (error) {
+          debugPrint("Speech Error: $error");
+          if (mounted) setState(() {});
+        },
+      );
+    } catch (e) {
+      debugPrint("Speech init exception: $e");
+    }
   }
 
   void startListening() async {
-    await speechToText.listen(onResult: onSpeechResult,pauseFor: Duration(seconds: 30), listenFor: const Duration(minutes: 5),);
-    setState(() {});
+    await speechToText.listen(
+      onResult: onSpeechResult,
+      listenOptions: SpeechListenOptions(
+        listenFor: const Duration(minutes: 5),
+        pauseFor: const Duration(seconds: 30),
+      ),
+    );
+    if (mounted) setState(() {});
   }
+
   void stopListening() async {
     await speechToText.stop();
-    setState(() {});
-
+    if (mounted) setState(() {});
   }
 
-  Future<void> onSpeechResult(SpeechRecognitionResult result) async {
+  void onSpeechResult(SpeechRecognitionResult result) {
+    if (!mounted) return;
     setState(() {
       liveText = result.recognizedWords;
     });
     if (result.finalResult) {
       setState(() {
         finalText = liveText;
-        controller.text += finalText + ' ';
+        if (controller.text.isNotEmpty && !controller.text.endsWith(' ')) {
+          controller.text += ' ';
+        }
+        controller.text += '$finalText ';
+        liveText = '';
       });
     }
-
   }
 
+  void _saveVoiceNote() {
+    var fullText = controller.text.trim();
+    if (fullText.isEmpty && liveText.trim().isNotEmpty) {
+      fullText = liveText.trim();
+    }
 
+    if (fullText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please record or type some text first!')),
+      );
+      return;
+    }
 
+    List<String> words =
+        fullText.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    String generatedTitle;
+    if (words.isEmpty) {
+      generatedTitle = "Voice Note";
+    } else if (words.length <= 3) {
+      generatedTitle = words.join(" ");
+    } else {
+      generatedTitle = "${words.take(3).join(" ")}...";
+    }
 
+    // Convert plain text into Quill Delta JSON format
+    final List<Map<String, dynamic>> deltaOps = [
+      {'insert': fullText},
+      {'insert': '\n'}
+    ];
+    final String contentJson = jsonEncode(deltaOps);
 
+    context.read<NotesProvider>().addNote(
+          generatedTitle,
+          contentJson,
+          formattedDate.format(DateTime.now()),
+        );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Voice Note saved successfully!')),
+    );
+    Navigator.pop(context);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.mic),
-            SizedBox(width: 10,),
-            Text('Voice Note'),
-            SizedBox(width: 20,),
+            SizedBox(width: 8),
+            Text('Voice Note', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
         centerTitle: true,
         actions: [
-          IconButton(onPressed: (){
-            var fullText = controller.text.trim();
-            List<String> words = fullText.split(" ");
-            var titleC = words.take(3).join(" ") + ' ...';
-            var contentC = controller.text.toString();
-            if(contentC.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Please fill all the fields!')));
-            }else{
-              context.read<NotesProvider>().addNote(titleC, contentC, formattedDate.format(DateTime.now()).toString());
-              ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Note! successfully Saved!')));
-              Navigator.pop(context);
-            }
-          }, icon: Icon(Icons.save))
+          IconButton(
+            onPressed: _saveVoiceNote,
+            icon: const Icon(Icons.check_rounded, size: 28),
+            tooltip: 'Save Voice Note',
+          )
         ],
       ),
-      body:  Center(
-        child: ListView(
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
           children: [
-            Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: TextField(
-                        controller: controller,
-                        maxLines: 16,
-                        style: TextStyle(fontSize: 18),
-                        decoration: InputDecoration(
-                          hintText: 'Press on mic button to start speaking - click here to edit',
-                          border: InputBorder.none
-                        ),
-                      ),
-                    ),
+            Card(
+              elevation: 0,
+              color: colorScheme.surfaceContainerHighest.withAlpha(80),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: TextField(
+                  controller: controller,
+                  maxLines: 12,
+                  style: const TextStyle(fontSize: 18),
+                  decoration: const InputDecoration(
+                    hintText:
+                        'Tap mic below to speak, or tap here to edit text manually...',
+                    border: InputBorder.none,
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Text(textAlign: TextAlign.justify ,liveText, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w500),),
-                ),
-              ],
+              ),
             ),
+            if (liveText.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer.withAlpha(100),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  liveText,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w500),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
           ],
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: FloatingActionButton.large(
-        onPressed: () async{
-          if(await speechToText.hasPermission && speechToText.isNotListening){
+        onPressed: () async {
+          if (await speechToText.hasPermission && speechToText.isNotListening) {
             startListening();
-          }else if (speechToText.isListening){
+          } else if (speechToText.isListening) {
             stopListening();
-          }else{
-            initSpeech();
+          } else {
+            await initSpeech();
           }
-        }, child: speechToText.isNotListening ? Icon(Icons.mic) : Icon(Icons.stop)
-      )
+        },
+        child: speechToText.isListening
+            ? const Icon(Icons.stop, color: Colors.red, size: 36)
+            : const Icon(Icons.mic, size: 36),
+      ),
     );
   }
 }

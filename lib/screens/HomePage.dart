@@ -1,5 +1,6 @@
-import 'dart:convert';
 import 'package:animations/animations.dart';
+import 'package:echo_notes/AuthenticationServices.dart';
+import 'package:echo_notes/models/note_model.dart';
 import 'package:echo_notes/provider_notes.dart';
 import 'package:echo_notes/screens/AddNote.dart';
 import 'package:echo_notes/screens/DetailScreen.dart';
@@ -9,6 +10,7 @@ import 'package:echo_notes/screens/Settings.dart';
 import 'package:echo_notes/screens/VoiceNote.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_expandable_fab/flutter_expandable_fab.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 class HomePage extends StatefulWidget {
@@ -23,7 +25,6 @@ class _HomePageState extends State<HomePage> {
   final ScrollController _scrollController = ScrollController();
   String selectedFolder = "All";
 
-  // --- SELECTION STATE ---
   bool isSelectionMode = false;
   Set<dynamic> selectedNoteKeys = {};
 
@@ -45,22 +46,47 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<bool> _authenticateLockedNote(BuildContext context) async {
+    final auth = AuthenticationServices();
+    bool isSecure = await auth.isDeviceSecure();
+    if (!isSecure) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                "Locked Note: Please set a PIN or Fingerprint in Device Settings to view."),
+          ),
+        );
+      }
+      return false;
+    }
+    return await auth.authenticateLocally();
+  }
+
   void _showDeleteCategoryDialog(String categoryName) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Category?'),
-        content: Text('Removing "$categoryName" will move all notes inside it to "General".'),
+        content: Text(
+            'Removing "$categoryName" will move all notes inside it to "General".'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
           TextButton(
             onPressed: () {
               context.read<NotesProvider>().deleteCategory(categoryName);
-              if (selectedFolder == categoryName) setState(() => selectedFolder = "All");
+              if (selectedFolder == categoryName) {
+                setState(() => selectedFolder = "All");
+              }
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('"$categoryName" removed.')));
+              ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('"$categoryName" removed.')));
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: const Text('Delete',
+                style: TextStyle(
+                    color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -79,11 +105,15 @@ class _HomePageState extends State<HomePage> {
           decoration: const InputDecoration(hintText: 'Enter name (e.g. Gym)'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
               if (catController.text.isNotEmpty) {
-                context.read<NotesProvider>().addCategory(catController.text.trim());
+                context
+                    .read<NotesProvider>()
+                    .addCategory(catController.text.trim());
                 Navigator.pop(context);
               }
             },
@@ -95,6 +125,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final provider = context.watch<NotesProvider>();
@@ -102,12 +138,15 @@ class _HomePageState extends State<HomePage> {
     final bool isMonochrome = colorScheme.primary == Colors.black;
 
     return Scaffold(
-      // --- DYNAMIC APP BAR ---
       appBar: AppBar(
         leading: isSelectionMode
-            ? IconButton(icon: const Icon(Icons.close), onPressed: _exitSelectionMode)
+            ? IconButton(
+                icon: const Icon(Icons.close), onPressed: _exitSelectionMode)
             : null,
-        title: Text(isSelectionMode ? '${selectedNoteKeys.length} Selected' : 'Echo Notes',
+        title: Text(
+            isSelectionMode
+                ? '${selectedNoteKeys.length} Selected'
+                : 'Echo Notes',
             style: const TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         scrolledUnderElevation: 0,
@@ -122,20 +161,34 @@ class _HomePageState extends State<HomePage> {
                   provider.deleteNote(key);
                 }
                 _exitSelectionMode();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Moved to Trash')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Moved to Trash')));
               },
             )
-          else
+          else ...[
+            // View Mode Toggle Button (Grid vs List)
             IconButton(
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SearchScreen())),
+              tooltip: provider.isGridView ? 'List View' : 'Grid View',
+              icon: Icon(
+                provider.isGridView
+                    ? Icons.view_agenda_outlined
+                    : Icons.grid_view_rounded,
+              ),
+              onPressed: () => provider.toggleGridView(),
+            ),
+            IconButton(
+              onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const SearchScreen())),
               icon: const Icon(Icons.search),
-
-            )
+              tooltip: 'Search',
+            ),
+          ]
         ],
       ),
       body: Column(
         children: [
-          // Folder Chips Row (Hidden in Selection Mode for focus)
           if (!isSelectionMode)
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -144,29 +197,47 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   ...folders.map((folder) {
                     bool isSelected = selectedFolder == folder;
-                    final defaultCategories = ["All", "General", "Work", "Personal", "College", "Ideas"];
+                    final defaultCategories = [
+                      "All",
+                      "General",
+                      "Work",
+                      "Personal",
+                      "College",
+                      "Ideas"
+                    ];
                     bool isDeletable = !defaultCategories.contains(folder);
 
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: GestureDetector(
-                        onLongPress: isDeletable ? () => _showDeleteCategoryDialog(folder) : null,
+                        onLongPress: isDeletable
+                            ? () => _showDeleteCategoryDialog(folder)
+                            : null,
                         child: ChoiceChip(
                           label: Text(folder),
                           selected: isSelected,
-                          onSelected: (val) => setState(() => selectedFolder = folder),
+                          onSelected: (val) =>
+                              setState(() => selectedFolder = folder),
                           showCheckmark: false,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
                           selectedColor: colorScheme.primary,
                           labelStyle: TextStyle(
-                            color: isSelected ? colorScheme.onPrimary : colorScheme.onSurface,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            color: isSelected
+                                ? colorScheme.onPrimary
+                                : colorScheme.onSurface,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
-                          side: BorderSide(color: isSelected ? Colors.transparent : colorScheme.primary.withAlpha(50)),
+                          side: BorderSide(
+                              color: isSelected
+                                  ? Colors.transparent
+                                  : colorScheme.primary.withAlpha(50)),
                         ),
                       ),
                     );
-                  }).toList(),
+                  }),
                   IconButton.filledTonal(
                     onPressed: _addNewCategoryDialog,
                     icon: const Icon(Icons.add_rounded),
@@ -175,22 +246,27 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-
-          // Notes List
           Expanded(
             child: Consumer<NotesProvider>(
               builder: (context, provider, _) {
-                List<Map> notes = List.from(provider.getNotesByFolder(selectedFolder));
-                notes.sort((a, b) {
+                List<Map<String, dynamic>> rawNotes =
+                    List.from(provider.getNotesByFolder(selectedFolder));
+
+                rawNotes.sort((a, b) {
                   bool aPinned = a['isPinned'] ?? false;
                   bool bPinned = b['isPinned'] ?? false;
                   if (aPinned && !bPinned) return -1;
                   if (!aPinned && bPinned) return 1;
-                  return (b['key'] as int).compareTo(a['key'] as int);
+
+                  final keyA = a['key'];
+                  final keyB = b['key'];
+                  if (keyA is Comparable && keyB is Comparable) {
+                    return keyB.compareTo(keyA);
+                  }
+                  return 0;
                 });
 
-                if (notes.isEmpty) {
-                  // Define relative icon and text based on the folder
+                if (rawNotes.isEmpty) {
                   IconData emptyIcon;
                   String emptyTitle;
                   String emptyDesc;
@@ -198,35 +274,39 @@ class _HomePageState extends State<HomePage> {
                   if (selectedFolder == "All") {
                     emptyIcon = Icons.note_add_rounded;
                     emptyTitle = 'No notes yet';
-                    emptyDesc = 'Capture your thoughts and ideas with the + button below.';
+                    emptyDesc =
+                        'Capture your thoughts and ideas with the + button below.';
                   } else if (selectedFolder == "Work") {
                     emptyIcon = Icons.business_center_rounded;
                     emptyTitle = 'Work is empty';
-                    emptyDesc = 'Time to plan your next big project or meeting.';
+                    emptyDesc =
+                        'Time to plan your next big project or meeting.';
                   } else if (selectedFolder == "College") {
                     emptyIcon = Icons.school_rounded;
                     emptyTitle = 'No study notes';
-                    emptyDesc = 'Keep track of your lectures and assignments here.';
+                    emptyDesc =
+                        'Keep track of your lectures and assignments here.';
                   } else if (selectedFolder == "Personal") {
                     emptyIcon = Icons.favorite_rounded;
                     emptyTitle = 'Personal space';
-                    emptyDesc = 'A quiet place for your private thoughts and goals.';
+                    emptyDesc =
+                        'A quiet place for your private thoughts and goals.';
                   } else if (selectedFolder == "Ideas") {
                     emptyIcon = Icons.lightbulb_outline_rounded;
                     emptyTitle = 'No ideas yet';
-                    emptyDesc = 'Don\'t let a great idea slip away. Write it down!';
+                    emptyDesc =
+                        'Don\'t let a great idea slip away. Write it down!';
                   } else {
-                    // Default for custom folders
                     emptyIcon = Icons.folder_open_rounded;
                     emptyTitle = '$selectedFolder is empty';
-                    emptyDesc = 'Start adding notes to your "$selectedFolder" notebook.';
+                    emptyDesc =
+                        'Start adding notes to your "$selectedFolder" notebook.';
                   }
 
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Pulsing-style circular background
                         Container(
                           padding: const EdgeInsets.all(28),
                           decoration: BoxDecoration(
@@ -263,15 +343,17 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                         const SizedBox(height: 32),
-                        // Primary action button
                         FilledButton.icon(
                           onPressed: () => Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const AddNote()),
+                            MaterialPageRoute(
+                                builder: (context) => const AddNote()),
                           ),
                           style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
                           ),
                           icon: const Icon(Icons.edit_note_rounded),
                           label: const Text('Write a Note'),
@@ -281,92 +363,39 @@ class _HomePageState extends State<HomePage> {
                   );
                 }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 100),
-                  controller: _scrollController,
-                  itemCount: notes.length,
-                  itemBuilder: (context, index) {
-                    final note = notes[index];
-                    final dynamic noteKey = note['key'];
-                    final bool isPinned = note['isPinned'] ?? false;
-                    final bool isSelected = selectedNoteKeys.contains(noteKey);
-                    final Color selectionColor = isMonochrome
-                        ? Colors.black.withAlpha(30)
-                        : colorScheme.primaryContainer;
+                if (provider.isGridView) {
+                  return GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    controller: _scrollController,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 0.88,
+                    ),
+                    itemCount: rawNotes.length,
+                    itemBuilder: (context, index) {
+                      final NoteModel note = NoteModel.fromMap(
+                          rawNotes[index]['key'], rawNotes[index]);
+                      return _buildNoteCard(
+                          context, note, colorScheme, isMonochrome, provider,
+                          isGrid: true);
+                    },
+                  );
+                }
 
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                  controller: _scrollController,
+                  itemCount: rawNotes.length,
+                  itemBuilder: (context, index) {
+                    final NoteModel note = NoteModel.fromMap(
+                        rawNotes[index]['key'], rawNotes[index]);
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      child: OpenContainer(
-                        transitionDuration: const Duration(milliseconds: 500),
-                        closedColor: isSelected ?  selectionColor : colorScheme.surfaceContainerLow,
-                        closedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                        closedElevation: 0,
-                        openElevation: 0,
-                        openColor: Theme.of(context).scaffoldBackgroundColor,
-                        closedBuilder: (context, openContainer) => InkWell(
-                          onTap: isSelectionMode ? () => _toggleSelection(noteKey) : openContainer,
-                          onLongPress: isSelectionMode
-                              ? () => _toggleSelection(noteKey)
-                              : () => _showNoteActions(context, noteKey, note, provider),
-                          borderRadius: BorderRadius.circular(24),
-                          child: Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: isSelected ? selectionColor : colorScheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(
-                                color: isSelected
-                                    ? colorScheme.primary
-                                    : (isPinned ? colorScheme.primary.withAlpha(150) : colorScheme.primary.withAlpha(25)),
-                                width: (isSelected || isPinned) ? 2 : 1,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    if (isSelectionMode)
-                                      Padding(
-                                        padding: const EdgeInsets.only(right: 12),
-                                        child: Icon(
-                                          isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-                                          color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    Expanded(
-                                      child: Text(
-                                        note['title'],
-                                        style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: colorScheme.onSurface),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    if (isPinned && !isSelectionMode) Icon(Icons.push_pin_rounded, size: 18, color: colorScheme.primary),
-                                  ],
-                                ),
-                                const SizedBox(height: 28),
-                                Row(
-                                  children: [
-                                    Icon(Icons.folder_open_rounded, size: 14, color: colorScheme.primary),
-                                    const SizedBox(width: 4),
-                                    Text(note['folder'] ?? "General", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                                    const Spacer(),
-                                    Icon(Icons.access_time_rounded, size: 14, color: colorScheme.onSurfaceVariant),
-                                    const SizedBox(width: 4),
-                                    Text(note['timestamp'], style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        openBuilder: (context, _) => DetailScreen(
-                          titleNote: note['title'],
-                          contentNote: note['content'],
-                          timestamp: note['timestamp'], index: noteKey,
-                        ),
-                      ),
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _buildNoteCard(
+                          context, note, colorScheme, isMonochrome, provider,
+                          isGrid: false),
                     );
                   },
                 );
@@ -376,49 +405,237 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       floatingActionButtonLocation: ExpandableFab.location,
-      floatingActionButton: isSelectionMode ? null : ExpandableFab(
-        key: fabKey,
-        type: ExpandableFabType.fan,
-        distance: 120,
-        children: [
-          FloatingActionButton(
-            heroTag: 'btn3',
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => Settings()));
-              fabKey.currentState?.close();
-            },
-            child: const Icon(Icons.settings_rounded),
+      floatingActionButton: isSelectionMode
+          ? null
+          : ExpandableFab(
+              key: fabKey,
+              type: ExpandableFabType.fan,
+              distance: 120,
+              children: [
+                FloatingActionButton(
+                  heroTag: 'btn3',
+                  onPressed: () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (context) => Settings()));
+                    fabKey.currentState?.close();
+                  },
+                  child: const Icon(Icons.settings_rounded),
+                ),
+                FloatingActionButton(
+                  heroTag: 'btn1',
+                  onPressed: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const AddNote()));
+                    fabKey.currentState?.close();
+                  },
+                  child: const Icon(Icons.add),
+                ),
+                FloatingActionButton(
+                  heroTag: 'btn2',
+                  onPressed: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => VoiceNote()));
+                    fabKey.currentState?.close();
+                  },
+                  child: const Icon(Icons.mic),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildNoteCard(
+    BuildContext context,
+    NoteModel note,
+    ColorScheme colorScheme,
+    bool isMonochrome,
+    NotesProvider provider, {
+    required bool isGrid,
+  }) {
+    final dynamic noteKey = note.key;
+    final bool isSelected = selectedNoteKeys.contains(noteKey);
+    final Color selectionColor = isMonochrome
+        ? Colors.black.withAlpha(30)
+        : colorScheme.primaryContainer;
+
+    return OpenContainer(
+      transitionDuration: const Duration(milliseconds: 500),
+      closedColor:
+          isSelected ? selectionColor : colorScheme.surfaceContainerLow,
+      closedShape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      closedElevation: 0,
+      openElevation: 0,
+      openColor: Theme.of(context).scaffoldBackgroundColor,
+      closedBuilder: (context, openContainer) => InkWell(
+        onTap: () async {
+          if (isSelectionMode) {
+            _toggleSelection(noteKey);
+            return;
+          }
+          if (note.isLocked) {
+            bool authSuccess = await _authenticateLockedNote(context);
+            if (authSuccess) {
+              openContainer();
+            }
+          } else {
+            openContainer();
+          }
+        },
+        onLongPress: isSelectionMode
+            ? () => _toggleSelection(noteKey)
+            : () => _showNoteActions(context, noteKey, note, provider),
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color:
+                isSelected ? selectionColor : colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isSelected
+                  ? colorScheme.primary
+                  : (note.isPinned
+                      ? colorScheme.primary.withAlpha(150)
+                      : colorScheme.primary.withAlpha(25)),
+              width: (isSelected || note.isPinned) ? 2 : 1,
+            ),
           ),
-          FloatingActionButton(
-            heroTag: 'btn1',
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const AddNote()));
-              fabKey.currentState?.close();
-            },
-            child: const Icon(Icons.add),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (isSelectionMode)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Icon(
+                            isSelected
+                                ? Icons.check_circle
+                                : Icons.radio_button_unchecked,
+                            color: isSelected
+                                ? colorScheme.primary
+                                : colorScheme.onSurfaceVariant,
+                            size: 20,
+                          ),
+                        ),
+                      Expanded(
+                        child: Text(
+                          note.title,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.onSurface,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (note.isLocked && !isSelectionMode)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4),
+                          child: Icon(Icons.lock_rounded,
+                              size: 16, color: Colors.orange),
+                        ),
+                      if (note.isPinned && !isSelectionMode)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Icon(Icons.push_pin_rounded,
+                              size: 16, color: colorScheme.primary),
+                        ),
+                    ],
+                  ),
+                  if (note.reminderDateTime != null) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(Icons.notifications_active_rounded,
+                            size: 12, color: Colors.amber),
+                        const SizedBox(width: 4),
+                        Text(
+                          DateFormat('d MMM, h:mm a').format(
+                            DateTime.parse(note.reminderDateTime!),
+                          ),
+                          style: const TextStyle(
+                              fontSize: 10, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (isGrid && !note.isLocked) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      note.plainTextSnippet,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurfaceVariant.withAlpha(180),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.folder_open_rounded,
+                        size: 13, color: colorScheme.primary),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        note.folder,
+                        style: const TextStyle(
+                            fontSize: 11, fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Icon(Icons.access_time_rounded,
+                        size: 12, color: colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(
+                      note.timestamp,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          FloatingActionButton(
-            heroTag: 'btn2',
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => VoiceNote()));
-              fabKey.currentState?.close();
-            },
-            child: const Icon(Icons.mic),
-          ),
-        ],
+        ),
+      ),
+      openBuilder: (context, _) => DetailScreen(
+        titleNote: note.title,
+        contentNote: note.content,
+        timestamp: note.timestamp,
+        index: noteKey,
       ),
     );
   }
 
-  void _showNoteActions(BuildContext context, dynamic noteKey, Map note, NotesProvider provider) {
+  void _showNoteActions(BuildContext context, dynamic noteKey, NoteModel note,
+      NotesProvider provider) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // --- NEW: SELECT NOTES OPTION ---
             ListTile(
               leading: const Icon(Icons.check_box_outlined),
               title: const Text('Select Notes'),
@@ -431,11 +648,49 @@ class _HomePageState extends State<HomePage> {
               },
             ),
             ListTile(
-              leading: Icon(note['isPinned'] == true ? Icons.push_pin_outlined : Icons.push_pin),
-              title: Text(note['isPinned'] == true ? 'Unpin Note' : 'Pin to Top'),
+              leading: Icon(note.isPinned
+                  ? Icons.push_pin_outlined
+                  : Icons.push_pin),
+              title: Text(note.isPinned ? 'Unpin Note' : 'Pin to Top'),
               onTap: () {
                 provider.togglePin(noteKey);
                 Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                  note.isLocked ? Icons.lock_open_rounded : Icons.lock_rounded,
+                  color: note.isLocked ? Colors.orange : null),
+              title: Text(note.isLocked
+                  ? 'Unlock Note'
+                  : 'Lock Note (Security Required)'),
+              onTap: () async {
+                Navigator.pop(context);
+                final auth = AuthenticationServices();
+                bool isSecure = await auth.isDeviceSecure();
+                if (!isSecure) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text(
+                              'Please set up a PIN/Biometrics on your device first.')),
+                    );
+                  }
+                  return;
+                }
+                bool success = await auth.authenticateLocally();
+                if (success) {
+                  provider.toggleNoteLock(noteKey);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(note.isLocked
+                            ? 'Note Unlocked'
+                            : 'Note Locked with Security'),
+                      ),
+                    );
+                  }
+                }
               },
             ),
             ListTile(
@@ -449,16 +704,30 @@ class _HomePageState extends State<HomePage> {
             ListTile(
               leading: const Icon(Icons.edit),
               title: const Text('Edit Note'),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => EditNote(index: noteKey, title: note['title'], content: note['content']),
-                ));
+                if (note.isLocked) {
+                  bool authSuccess = await _authenticateLockedNote(context);
+                  if (!authSuccess) return;
+                }
+                if (context.mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditNote(
+                        index: noteKey,
+                        title: note.title,
+                        content: note.content,
+                      ),
+                    ),
+                  );
+                }
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete),
-              title: const Text('Move to Trash',),
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('Move to Trash',
+                  style: TextStyle(color: Colors.red)),
               onTap: () {
                 provider.deleteNote(noteKey);
                 Navigator.pop(context);
@@ -470,7 +739,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _showFolderPicker(BuildContext context, dynamic noteKey, NotesProvider provider) {
+  void _showFolderPicker(
+      BuildContext context, dynamic noteKey, NotesProvider provider) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

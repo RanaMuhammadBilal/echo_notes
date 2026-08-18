@@ -1,28 +1,84 @@
+import 'dart:io';
 import 'package:echo_notes/AuthenticationProvider.dart';
 import 'package:echo_notes/ThemeProvider.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:local_auth_android/local_auth_android.dart';
-import 'package:local_auth_platform_interface/local_auth_platform_interface.dart';
-import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../AuthenticationServices.dart';
 import '../provider_notes.dart';
 import 'TrashScreen.dart';
 
-class Settings extends StatefulWidget{
+class Settings extends StatefulWidget {
+  const Settings({super.key});
+
   @override
   State<StatefulWidget> createState() => SettingsState();
-
 }
 
 class SettingsState extends State<Settings> {
+  Future<void> _exportBackup(BuildContext context, NotesProvider notesProvider) async {
+    try {
+      final jsonContent = notesProvider.exportNotesBackup();
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/echo_notes_backup.json');
+      await file.writeAsString(jsonContent);
+
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'Echo Notes Backup',
+        text: 'Backup file generated from Echo Notes.',
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Backup export failed: $e")),
+        );
+      }
+    }
+  }
+
+  Future<void> _importBackup(BuildContext context, NotesProvider notesProvider) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final filePath = result.files.single.path;
+        if (filePath != null) {
+          final file = File(filePath);
+          final content = await file.readAsString();
+          final success = await notesProvider.importNotesBackup(content);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(success
+                    ? "Notes successfully imported and restored!"
+                    : "Invalid backup file format."),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Backup import failed: $e")),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final notesProvider = Provider.of<NotesProvider>(context);
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -41,11 +97,11 @@ class SettingsState extends State<Settings> {
             child: Material(
               color: Colors.transparent,
               clipBehavior: Clip.antiAlias,
-              shape: RoundedRectangleBorder(   // ✅ ADD THIS LINE
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
               child: ExpansionTile(
-                shape: const Border(), // Removes default lines
+                shape: const Border(),
                 leading: Icon(Icons.palette_outlined, color: colorScheme.primary),
                 title: const Text('App Theme', style: TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: Text('Current: ${themeProvider.currentThemeName.toUpperCase()}'),
@@ -75,7 +131,6 @@ class SettingsState extends State<Settings> {
                         _buildThemeOption(context, 'valentine', 'Valentine', const Color(0xFFFF4D6D), const Color(0xFFFFF0F3)),
                         _buildThemeOption(context, 'volcano', 'Volcano', const Color(0xFFFF5722), const Color(0xFF121212)),
                         _buildThemeOption(context, 'ivory', 'Ivory', const Color(0xFF5D4037), const Color(0xFFFDFCF0)),
-
                       ],
                     ),
                   ),
@@ -83,10 +138,32 @@ class SettingsState extends State<Settings> {
               ),
             ),
           ),
-
           const SizedBox(height: 12),
 
-          // --- BIOMETRIC SECTION ---
+          // --- VIEW LAYOUT SECTION ---
+          Card(
+            elevation: 0,
+            color: colorScheme.surfaceContainerHighest.withAlpha(80),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            clipBehavior: Clip.antiAlias,
+            child: SwitchListTile.adaptive(
+              secondary: Icon(
+                notesProvider.isGridView
+                    ? Icons.grid_view_rounded
+                    : Icons.view_agenda_rounded,
+                color: colorScheme.primary,
+              ),
+              value: notesProvider.isGridView,
+              onChanged: (value) {
+                notesProvider.toggleGridView();
+              },
+              title: const Text('Grid Layout', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('Display notes in a 2-column grid'),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // --- APP-WIDE BIOMETRIC LOCK SECTION (PRESERVED) ---
           Consumer<AuthenticationProvider>(
             builder: (context, authProvider, _) {
               return Card(
@@ -101,31 +178,29 @@ class SettingsState extends State<Settings> {
                     HapticFeedback.mediumImpact();
                     if (value == true) {
                       final auth = AuthenticationServices();
-
-                      // Check available biometrics
                       List<BiometricType> biometrics = await auth.localAuthentication.getAvailableBiometrics();
                       bool isSupported = await auth.localAuthentication.isDeviceSupported();
 
-                      // If no biometrics are enrolled AND the device doesn't support basic PIN/Pass
-                      // (or they aren't set), block the toggle.
                       if (biometrics.isEmpty && !isSupported) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("No security set! Please add a PIN or Fingerprint in Device Settings.")),
-                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("No security set! Please add a PIN or Fingerprint in Device Settings.")),
+                          );
+                        }
                         return;
                       }
                     }
                     await authProvider.saveAuthentication(value: value);
                   },
-                  title: const Text('Biometric Lock', style: TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: const Text('Secure your notes with fingerprint'),
+                  title: const Text('App Lock', style: TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Require biometrics/PIN when opening application'),
                 ),
               );
             },
           ),
           const SizedBox(height: 12),
 
-
+          // --- EDITOR BORDER SECTION ---
           Consumer<NotesProvider>(
             builder: (context, notesProvider, _) {
               return Card(
@@ -135,10 +210,10 @@ class SettingsState extends State<Settings> {
                 clipBehavior: Clip.antiAlias,
                 child: SwitchListTile.adaptive(
                   secondary: Icon(
-                      notesProvider.showNoteBorder
-                          ? Icons.border_all_rounded
-                          : Icons.border_clear_rounded,
-                      color: colorScheme.primary
+                    notesProvider.showNoteBorder
+                        ? Icons.border_all_rounded
+                        : Icons.border_clear_rounded,
+                    color: colorScheme.primary,
                   ),
                   value: notesProvider.showNoteBorder,
                   onChanged: (value) {
@@ -151,7 +226,33 @@ class SettingsState extends State<Settings> {
             },
           ),
           const SizedBox(height: 12),
-          // --- RECYCLE BIN SECTION (NEW) ---
+
+          // --- BACKUP & RESTORE SECTION ---
+          Card(
+            elevation: 0,
+            color: colorScheme.surfaceContainerHighest.withAlpha(80),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Icon(Icons.cloud_upload_outlined, color: colorScheme.primary),
+                  title: const Text('Backup Notes (Export JSON)', style: TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Export all notes and notebooks to file'),
+                  onTap: () => _exportBackup(context, notesProvider),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  leading: Icon(Icons.cloud_download_outlined, color: colorScheme.primary),
+                  title: const Text('Restore Notes (Import JSON)', style: TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Import notes from a JSON backup file'),
+                  onTap: () => _importBackup(context, notesProvider),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // --- RECYCLE BIN SECTION ---
           Card(
             elevation: 0,
             color: colorScheme.surfaceContainerHighest.withAlpha(80),
@@ -165,7 +266,7 @@ class SettingsState extends State<Settings> {
                 );
               },
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              leading: Icon(Icons.delete_sweep_outlined,color: colorScheme.primary),
+              leading: Icon(Icons.delete_sweep_outlined, color: colorScheme.primary),
               title: const Text('Recycle Bin', style: TextStyle(fontWeight: FontWeight.w600)),
               subtitle: const Text('Notes are auto-deleted after 30 days'),
               trailing: Icon(Icons.chevron_right_rounded, color: colorScheme.onSurfaceVariant),
@@ -177,7 +278,6 @@ class SettingsState extends State<Settings> {
     );
   }
 
-  // --- Theme Preview Circle Helper ---
   Widget _buildThemeOption(BuildContext context, String themeKey, String label, Color accent, Color bg) {
     final provider = context.read<ThemeProvider>();
     final isSelected = provider.currentThemeName == themeKey;
@@ -186,7 +286,7 @@ class SettingsState extends State<Settings> {
       onTap: () {
         HapticFeedback.lightImpact();
         provider.saveTheme(themeKey);
-        },
+      },
       child: Column(
         children: [
           AnimatedContainer(
