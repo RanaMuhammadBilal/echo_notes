@@ -166,10 +166,18 @@ class _AddNoteState extends State<AddNote> {
               icon: Icon(Icons.document_scanner_outlined, color: colorScheme.primary),
               tooltip: 'Scan Text from Image',
             ),
-            IconButton(
-              onPressed: _saveNote,
-              icon: Icon(Icons.check, size: 28, color: colorScheme.primary),
-              tooltip: 'Save Note',
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilledButton.tonal(
+                onPressed: _saveNote,
+                child: const Row(
+                  children: [
+                    Icon(Icons.check_rounded, size: 18),
+                    SizedBox(width: 4),
+                    Text('Save', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

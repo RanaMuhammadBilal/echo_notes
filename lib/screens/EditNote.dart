@@ -175,10 +175,18 @@ class _EditNoteState extends State<EditNote> {
             icon: Icon(Icons.document_scanner_outlined, color: colorScheme.primary),
             tooltip: 'Scan Text from Image',
           ),
-          IconButton(
-            onPressed: _updateNote,
-            icon: Icon(Icons.save_as_rounded, size: 28, color: colorScheme.primary),
-            tooltip: 'Save Changes',
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilledButton.tonal(
+              onPressed: _updateNote,
+              child: const Row(
+                children: [
+                  Icon(Icons.check_rounded, size: 18),
+                  SizedBox(width: 4),
+                  Text('Update', style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
           ),
         ],
       ),

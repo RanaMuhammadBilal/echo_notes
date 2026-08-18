@@ -38,6 +38,9 @@ class NotesProvider extends ChangeNotifier {
   bool _enableFabPulse = true;
   bool get enableFabPulse => _enableAnimations && _enableFabPulse;
 
+  bool _enableSyntheticWaveform = false;
+  bool get enableSyntheticWaveform => _enableSyntheticWaveform;
+
   bool _enableGlassmorphism = true;
   bool get enableGlassmorphism => _enableGlassmorphism;
 
@@ -100,6 +103,7 @@ class NotesProvider extends ChangeNotifier {
     _enableGridAnimations = _settingsBox.get('enableGridAnimations', defaultValue: true);
     _enableButtonBounce = _settingsBox.get('enableButtonBounce', defaultValue: true);
     _enableFabPulse = _settingsBox.get('enableFabPulse', defaultValue: true);
+    _enableSyntheticWaveform = _settingsBox.get('enableSyntheticWaveform', defaultValue: false);
     _enableGlassmorphism = _settingsBox.get('enableGlassmorphism', defaultValue: true);
     notifyListeners();
   }
@@ -163,6 +167,13 @@ class NotesProvider extends ChangeNotifier {
   void toggleFabPulse() {
     _enableFabPulse = !_enableFabPulse;
     _settingsBox.put('enableFabPulse', _enableFabPulse);
+    HapticFeedback.lightImpact();
+    notifyListeners();
+  }
+
+  void toggleSyntheticWaveform() {
+    _enableSyntheticWaveform = !_enableSyntheticWaveform;
+    _settingsBox.put('enableSyntheticWaveform', _enableSyntheticWaveform);
     HapticFeedback.lightImpact();
     notifyListeners();
   }

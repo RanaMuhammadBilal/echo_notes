@@ -16,8 +16,21 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../AuthenticationServices.dart';
-import '../provider_notes.dart';
+import 'package:echo_notes/AuthenticationServices.dart';
+import 'package:echo_notes/provider_notes.dart';
+
+class _PdfLineOp {
+  final String text;
+  final Map<String, dynamic>? attributes;
+  final Uint8List? imageBytes;
+
+  _PdfLineOp({required this.text, this.attributes, this.imageBytes});
+}
+
+class _PdfLine {
+  final List<_PdfLineOp> ops = [];
+  Map<String, dynamic> lineAttributes = {};
+}
 
 class DetailScreen extends StatefulWidget {
   final dynamic index;
@@ -358,7 +371,18 @@ class _DetailScreenState extends State<DetailScreen> {
     );
   }
 
-  Future<void> _exportToPdf(String title, String timestamp) async {
+  PdfColor? _parsePdfColor(String? hexString) {
+    if (hexString == null) return null;
+    try {
+      String clean = hexString.replaceAll('#', '');
+      if (clean.length == 6) clean = 'FF$clean';
+      return PdfColor.fromInt(int.parse(clean, radix: 16));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> _exportToPdf(String title, String timestamp, {String? folder}) async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -397,73 +421,31 @@ class _DetailScreenState extends State<DetailScreen> {
           fontSize: 11,
           color: PdfColors.grey700);
 
-      List<pw.Widget> pdfContent = [];
-      List<pw.TextSpan> currentParagraphSpans = [];
+      // Parse document into lines with inline ops and line attributes
+      List<_PdfLine> docLines = [];
+      _PdfLine currentLine = _PdfLine();
+      final sanitizeRegex = RegExp(r'[\uFE0F\u200D]');
 
-      void flushParagraph() {
-        if (currentParagraphSpans.isEmpty) {
-          pdfContent.add(pw.SizedBox(height: 12));
-        } else {
-          pdfContent.add(
-            pw.Padding(
-              padding: const pw.EdgeInsets.only(bottom: 8),
-              child: pw.RichText(
-                text: pw.TextSpan(children: List.from(currentParagraphSpans)),
-              ),
-            ),
-          );
-          currentParagraphSpans.clear();
-        }
-      }
-
-      void processTextOp(String text, Map<String, dynamic>? attributes) {
-        final sanitizeRegex = RegExp(r'[\uFE0F\u200D]');
-        String sanitized = text.replaceAll(sanitizeRegex, '');
-        final parts = sanitized.split('\n');
-
-        bool isBold = attributes?['bold'] == true;
-        bool isItalic = attributes?['italic'] == true;
-
-        pw.Font targetFont = baseFont;
-        if (isBold && isItalic) {
-          targetFont = boldItalicFont;
-        } else if (isBold) {
-          targetFont = boldFont;
-        } else if (isItalic) {
-          targetFont = italicFont;
-        }
-
-        final style = pw.TextStyle(
-          font: targetFont,
-          fontFallback: [emojiFont],
-          fontSize: 13,
-          lineSpacing: 1.5,
-        );
-
-        for (int i = 0; i < parts.length; i++) {
-          if (parts[i].isNotEmpty) {
-            currentParagraphSpans.add(pw.TextSpan(
-              text: parts[i],
-              style: style,
-            ));
-          }
-          if (i < parts.length - 1) {
-            flushParagraph();
-          }
-        }
-      }
-
-      final delta = _controller.document.toDelta();
-
-      for (final op in delta.toList()) {
+      for (final op in _controller.document.toDelta().toList()) {
         if (op.data is String) {
-          processTextOp(op.data as String, op.attributes);
-        } else if (op.data is Map && (op.data as Map).containsKey('image')) {
-          flushParagraph();
+          String text = (op.data as String).replaceAll(sanitizeRegex, '');
+          final parts = text.split('\n');
 
+          for (int i = 0; i < parts.length; i++) {
+            if (parts[i].isNotEmpty) {
+              currentLine.ops.add(_PdfLineOp(text: parts[i], attributes: op.attributes));
+            }
+            if (i < parts.length - 1) {
+              if (op.attributes != null) {
+                currentLine.lineAttributes.addAll(op.attributes!);
+              }
+              docLines.add(currentLine);
+              currentLine = _PdfLine();
+            }
+          }
+        } else if (op.data is Map && (op.data as Map).containsKey('image')) {
           final String imageSource = (op.data as Map)['image'].toString();
           Uint8List? imageBytes;
-
           try {
             if (imageSource.startsWith('data:image')) {
               final base64Str = imageSource.split(',').last;
@@ -475,42 +457,256 @@ class _DetailScreenState extends State<DetailScreen> {
               }
             }
           } catch (e) {
-            debugPrint("Failed to load PDF image: $e");
+            debugPrint("PDF Image load error: $e");
           }
-
           if (imageBytes != null) {
-            pdfContent.add(
-              pw.Padding(
-                padding: const pw.EdgeInsets.symmetric(vertical: 16),
-                child: pw.Center(
-                  child: pw.Image(
-                    pw.MemoryImage(imageBytes),
-                    fit: pw.BoxFit.contain,
-                  ),
-                ),
-              ),
-            );
+            currentLine.ops.add(_PdfLineOp(text: '', imageBytes: imageBytes));
           }
         }
       }
+      if (currentLine.ops.isNotEmpty || currentLine.lineAttributes.isNotEmpty) {
+        docLines.add(currentLine);
+      }
 
-      flushParagraph();
+      // Convert docLines to PDF widgets
+      List<pw.Widget> pdfContent = [];
+      int orderedListIndex = 0;
+
+      for (final line in docLines) {
+        final lineAttrs = line.lineAttributes;
+        final String? listType = lineAttrs['list'] as String?;
+        final dynamic rawHeader = lineAttrs['header'];
+        final int? headerLevel = rawHeader is int ? rawHeader : null;
+        final bool isBlockquote = lineAttrs['blockquote'] == true;
+        final bool isCodeBlock = lineAttrs['code-block'] == true;
+
+        if (listType == 'ordered') {
+          orderedListIndex++;
+        } else {
+          orderedListIndex = 0;
+        }
+
+        bool hasImage = line.ops.any((op) => op.imageBytes != null);
+        if (hasImage) {
+          for (final op in line.ops) {
+            if (op.imageBytes != null) {
+              pdfContent.add(
+                pw.Padding(
+                  padding: const pw.EdgeInsets.symmetric(vertical: 12),
+                  child: pw.Center(
+                    child: pw.SizedBox(
+                      height: 250,
+                      child: pw.Image(
+                        pw.MemoryImage(op.imageBytes!),
+                        fit: pw.BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+          }
+          continue;
+        }
+
+        List<pw.InlineSpan> spans = [];
+        double baseFontSize = 13.0;
+        pw.Font defaultFont = baseFont;
+
+        if (headerLevel == 1) {
+          baseFontSize = 22.0;
+          defaultFont = boldFont;
+        } else if (headerLevel == 2) {
+          baseFontSize = 18.0;
+          defaultFont = boldFont;
+        } else if (headerLevel == 3) {
+          baseFontSize = 15.0;
+          defaultFont = boldFont;
+        }
+
+        for (final op in line.ops) {
+          if (op.text.isEmpty) continue;
+
+          bool isBold = op.attributes?['bold'] == true || headerLevel != null;
+          bool isItalic = op.attributes?['italic'] == true;
+          bool isUnderline = op.attributes?['underline'] == true;
+          bool isStrike = op.attributes?['strike'] == true;
+          PdfColor? color = _parsePdfColor(op.attributes?['color']);
+          PdfColor? bg = _parsePdfColor(op.attributes?['background']);
+
+          pw.Font targetFont = defaultFont;
+          if (isBold && isItalic) {
+            targetFont = boldItalicFont;
+          } else if (isBold) {
+            targetFont = boldFont;
+          } else if (isItalic) {
+            targetFont = italicFont;
+          }
+
+          pw.TextDecoration? decoration;
+          if (isUnderline && isStrike) {
+            decoration = pw.TextDecoration.combine(
+                [pw.TextDecoration.underline, pw.TextDecoration.lineThrough]);
+          } else if (isUnderline) {
+            decoration = pw.TextDecoration.underline;
+          } else if (isStrike) {
+            decoration = pw.TextDecoration.lineThrough;
+          }
+
+          spans.add(
+            pw.TextSpan(
+              text: op.text,
+              style: pw.TextStyle(
+                font: targetFont,
+                fontFallback: [emojiFont],
+                fontSize: baseFontSize,
+                color: color ?? PdfColors.black,
+                background: bg != null ? pw.BoxDecoration(color: bg) : null,
+                decoration: decoration,
+                lineSpacing: 1.4,
+              ),
+            ),
+          );
+        }
+
+        if (spans.isEmpty) {
+          pdfContent.add(pw.SizedBox(height: 8));
+          continue;
+        }
+
+        pw.Widget lineWidget = pw.RichText(
+          text: pw.TextSpan(children: spans),
+        );
+
+        if (listType != null) {
+          pw.Widget prefixWidget;
+          if (listType == 'ordered') {
+            prefixWidget = pw.Padding(
+              padding: const pw.EdgeInsets.only(right: 6),
+              child: pw.Text(
+                '$orderedListIndex.',
+                style: pw.TextStyle(
+                  font: boldFont,
+                  fontFallback: [emojiFont],
+                  fontSize: baseFontSize,
+                  color: PdfColors.blue800,
+                ),
+              ),
+            );
+          } else if (listType == 'bullet') {
+            prefixWidget = pw.Padding(
+              padding: const pw.EdgeInsets.only(right: 8, top: 4),
+              child: pw.Container(
+                width: 5,
+                height: 5,
+                decoration: const pw.BoxDecoration(
+                  color: PdfColors.grey900,
+                  shape: pw.BoxShape.circle,
+                ),
+              ),
+            );
+          } else if (listType == 'checked') {
+            prefixWidget = pw.Padding(
+              padding: const pw.EdgeInsets.only(right: 6),
+              child: pw.Text('[✓] ',
+                  style: pw.TextStyle(font: boldFont, color: PdfColors.green700)),
+            );
+          } else {
+            prefixWidget = pw.Padding(
+              padding: const pw.EdgeInsets.only(right: 6),
+              child: pw.Text('[  ] ',
+                  style: pw.TextStyle(font: baseFont, color: PdfColors.grey600)),
+            );
+          }
+
+          lineWidget = pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              prefixWidget,
+              pw.Expanded(child: lineWidget),
+            ],
+          );
+        }
+
+        if (isBlockquote) {
+          lineWidget = pw.Container(
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                left: pw.BorderSide(color: PdfColors.blue500, width: 3),
+              ),
+              color: PdfColors.blueGrey50,
+            ),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            margin: const pw.EdgeInsets.only(left: 8, top: 4, bottom: 4),
+            child: lineWidget,
+          );
+        } else if (isCodeBlock) {
+          lineWidget = pw.Container(
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey200,
+              borderRadius: pw.BorderRadius.circular(4),
+            ),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            margin: const pw.EdgeInsets.only(left: 4, top: 4, bottom: 4),
+            child: lineWidget,
+          );
+        }
+
+        double bottomPadding =
+            headerLevel != null ? 8.0 : (listType != null ? 4.0 : 6.0);
+        pdfContent.add(
+          pw.Padding(
+            padding: pw.EdgeInsets.only(bottom: bottomPadding),
+            child: lineWidget,
+          ),
+        );
+      }
 
       String rawTitle = title.replaceAll(RegExp(r'[\uFE0F\u200D]'), '');
       String rawTimestamp = timestamp.replaceAll(RegExp(r'[\uFE0F\u200D]'), '');
+      String rawFolder = (folder ?? 'General').replaceAll(RegExp(r'[\uFE0F\u200D]'), '');
 
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.symmetric(horizontal: 40, vertical: 48),
+          footer: (pw.Context context) {
+            return pw.Container(
+              alignment: pw.Alignment.centerRight,
+              margin: const pw.EdgeInsets.only(top: 20),
+              child: pw.Text(
+                'Page ${context.pageNumber} of ${context.pagesCount}',
+                style: pw.TextStyle(font: baseFont, fontSize: 9, color: PdfColors.grey600),
+              ),
+            );
+          },
           build: (pw.Context context) {
             return [
-              pw.Text(rawTitle, style: titleStyle),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Expanded(
+                    child: pw.Text(rawTitle, style: titleStyle),
+                  ),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.blue50,
+                      borderRadius: pw.BorderRadius.circular(8),
+                      border: pw.Border.all(color: PdfColors.blue200),
+                    ),
+                    child: pw.Text(
+                      rawFolder,
+                      style: pw.TextStyle(font: boldFont, fontSize: 10, color: PdfColors.blue800),
+                    ),
+                  ),
+                ],
+              ),
               pw.SizedBox(height: 6),
               pw.Text(rawTimestamp, style: timestampStyle),
               pw.SizedBox(height: 12),
               pw.Divider(thickness: 1, color: PdfColors.grey300),
-              pw.SizedBox(height: 24),
+              pw.SizedBox(height: 20),
               ...pdfContent,
             ];
           },
@@ -550,10 +746,11 @@ class _DetailScreenState extends State<DetailScreen> {
     final provider = context.watch<NotesProvider>();
 
     // Fetch reactive live note data by key
-    final allNotes = [...provider.notes, ...provider.trashedNotes];
-    final liveNoteMap = allNotes.firstWhere(
+    final List<Map<String, dynamic>> allNotes =
+        List<Map<String, dynamic>>.from([...provider.notes, ...provider.trashedNotes]);
+    final Map<String, dynamic> liveNoteMap = allNotes.firstWhere(
       (n) => n['key'] == widget.index,
-      orElse: () => {
+      orElse: () => <String, dynamic>{
         'title': widget.titleNote,
         'content': widget.contentNote,
         'timestamp': widget.timestamp,
@@ -659,7 +856,8 @@ class _DetailScreenState extends State<DetailScreen> {
               if (value == 'stats') {
                 _showStatistics();
               } else if (value == 'pdf') {
-                _exportToPdf(currentNote.title, currentNote.timestamp);
+                _exportToPdf(currentNote.title, currentNote.timestamp,
+                    folder: currentNote.folder);
               } else if (value == 'markdown') {
                 _exportToMarkdown(currentNote.title, currentNote.content,
                     currentNote.timestamp, currentNote.folder);

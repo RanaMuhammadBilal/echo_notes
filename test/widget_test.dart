@@ -173,6 +173,10 @@ void main() {
       provider.toggleFabPulse();
       expect(provider.enableFabPulse, equals(!initialFabPulse));
 
+      final initialSyntheticWave = provider.enableSyntheticWaveform;
+      provider.toggleSyntheticWaveform();
+      expect(provider.enableSyntheticWaveform, equals(!initialSyntheticWave));
+
       final initialAnim = provider.enableAnimations;
       provider.toggleAnimations();
       expect(provider.enableAnimations, equals(!initialAnim));

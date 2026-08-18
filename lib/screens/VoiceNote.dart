@@ -92,6 +92,15 @@ class _VoiceNoteState extends State<VoiceNote>
     });
   }
 
+  double _soundLevel = 0.0;
+
+  void _onSoundLevelChange(double level) {
+    if (!mounted || !_isManuallyListening) return;
+    setState(() {
+      _soundLevel = level;
+    });
+  }
+
   void _startListeningService() async {
     if (!_speechInitialized) {
       await _initSpeech();
@@ -99,6 +108,7 @@ class _VoiceNoteState extends State<VoiceNote>
     try {
       await speechToText.listen(
         onResult: _onSpeechResult,
+        onSoundLevelChange: _onSoundLevelChange,
         listenOptions: SpeechListenOptions(
           listenFor: const Duration(hours: 1), // Long duration loop
           pauseFor: const Duration(seconds: 60),
@@ -367,6 +377,8 @@ class _VoiceNoteState extends State<VoiceNote>
                 color: _isManuallyListening
                     ? Colors.red
                     : colorScheme.primary,
+                soundLevel: _soundLevel,
+                isSynthetic: notesProvider.enableSyntheticWaveform,
               ),
             ),
             const SizedBox(height: 12),
@@ -484,12 +496,16 @@ class AudioWaveformVisualizer extends StatelessWidget {
   final bool isListening;
   final Animation<double> animation;
   final Color color;
+  final double soundLevel;
+  final bool isSynthetic;
 
   const AudioWaveformVisualizer({
     super.key,
     required this.isListening,
     required this.animation,
     required this.color,
+    this.soundLevel = 0.0,
+    this.isSynthetic = false,
   });
 
   @override
@@ -497,6 +513,10 @@ class AudioWaveformVisualizer extends StatelessWidget {
     return AnimatedBuilder(
       animation: animation,
       builder: (context, _) {
+        // Normalize sound level from dB (-2..10) to 0.05..1.0 range
+        final normalizedVolume =
+            ((soundLevel + 2.0) / 12.0).clamp(0.05, 1.0);
+
         return Container(
           height: 48,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -509,21 +529,31 @@ class AudioWaveformVisualizer extends StatelessWidget {
             children: List.generate(24, (index) {
               double height;
               if (isListening) {
-                // Generate dynamic reactive bar heights
-                final double seed =
-                    math.sin((animation.value * math.pi * 2) + (index * 0.4));
-                height = 8 + (seed.abs() * 32);
+                if (isSynthetic) {
+                  // Synthetic Mode: Oscillating sine pattern
+                  final double seed = math.sin(
+                      (animation.value * math.pi * 2) + (index * 0.4));
+                  height = 8 + (seed.abs() * 32);
+                } else {
+                  // Live Volume Mode (Default):
+                  // Quiet voice -> lines are small (6px - 10px)
+                  // Loud voice -> lines become tall (up to 44px)
+                  final double barVariation =
+                      0.6 + (math.sin(index * 0.75).abs() * 0.5);
+                  height = (6.0 + (normalizedVolume * 38.0 * barVariation))
+                      .clamp(6.0, 44.0);
+                }
               } else {
                 height = 6;
               }
 
               return AnimatedContainer(
-                duration: const Duration(milliseconds: 100),
+                duration: const Duration(milliseconds: 80),
                 width: 4,
                 height: height,
                 decoration: BoxDecoration(
                   color: isListening
-                      ? color.withAlpha(180 + (index % 5 * 15))
+                      ? color.withAlpha(160 + ((index % 5) * 20))
                       : color.withAlpha(60),
                   borderRadius: BorderRadius.circular(2),
                 ),

@@ -18,7 +18,11 @@ class AnimationControlScreen extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
         scrolledUnderElevation: 0,
+        elevation: 0
+
       ),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -147,6 +151,17 @@ class AnimationControlScreen extends StatelessWidget {
                   value: notesProvider.enableFabPulse,
                   enabled: notesProvider.enableAnimations,
                   onChanged: (_) => notesProvider.toggleFabPulse(),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                _buildAnimationToggleTile(
+                  context,
+                  title: 'Synthetic Waveform Mode',
+                  subtitle:
+                      'OFF (Default): Audio wave reacts to live mic volume.\nON: Shows synthetic animated wave pattern.',
+                  icon: Icons.graphic_eq_rounded,
+                  value: notesProvider.enableSyntheticWaveform,
+                  enabled: notesProvider.enableAnimations,
+                  onChanged: (_) => notesProvider.toggleSyntheticWaveform(),
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 _buildAnimationToggleTile(
