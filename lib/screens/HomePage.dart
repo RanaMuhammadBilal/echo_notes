@@ -376,8 +376,10 @@ class _HomePageState extends State<HomePage> {
                   );
                 }
 
+                Widget listOrGridView;
                 if (provider.isGridView) {
-                  return GridView.builder(
+                  listOrGridView = GridView.builder(
+                    key: const ValueKey("grid_view_layout"),
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                     controller: _scrollController,
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -409,34 +411,53 @@ class _HomePageState extends State<HomePage> {
                       return cardWidget;
                     },
                   );
+                } else {
+                  listOrGridView = ListView.builder(
+                    key: const ValueKey("list_view_layout"),
+                    padding: const EdgeInsets.only(bottom: 100),
+                    controller: _scrollController,
+                    itemCount: rawNotes.length,
+                    itemBuilder: (context, index) {
+                      final NoteModel note = NoteModel.fromMap(
+                          rawNotes[index]['key'], rawNotes[index]);
+                      final cardWidget = _buildListCard(
+                          context, note, colorScheme, isMonochrome, provider);
+
+                      if (provider.enableCardAnimations) {
+                        return TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0.0, end: 1.0),
+                          duration: Duration(
+                              milliseconds: 250 + (index * 40).clamp(0, 350)),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) => Transform.translate(
+                            offset: Offset(0, (1 - value) * 16),
+                            child: Opacity(opacity: value, child: child),
+                          ),
+                          child: cardWidget,
+                        );
+                      }
+                      return cardWidget;
+                    },
+                  );
                 }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 100),
-                  controller: _scrollController,
-                  itemCount: rawNotes.length,
-                  itemBuilder: (context, index) {
-                    final NoteModel note = NoteModel.fromMap(
-                        rawNotes[index]['key'], rawNotes[index]);
-                    final cardWidget = _buildListCard(
-                        context, note, colorScheme, isMonochrome, provider);
+                if (provider.enableGridAnimations) {
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 350),
+                    switchInCurve: Curves.easeOutBack,
+                    switchOutCurve: Curves.easeInQuad,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(begin: 0.94, end: 1.0).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: listOrGridView,
+                  );
+                }
 
-                    if (provider.enableCardAnimations) {
-                      return TweenAnimationBuilder<double>(
-                        tween: Tween<double>(begin: 0.0, end: 1.0),
-                        duration: Duration(
-                            milliseconds: 250 + (index * 40).clamp(0, 350)),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, value, child) => Transform.translate(
-                          offset: Offset(0, (1 - value) * 16),
-                          child: Opacity(opacity: value, child: child),
-                        ),
-                        child: cardWidget,
-                      );
-                    }
-                    return cardWidget;
-                  },
-                );
+                return listOrGridView;
               },
             ),
           ),

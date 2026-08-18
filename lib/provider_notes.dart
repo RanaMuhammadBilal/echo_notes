@@ -29,6 +29,15 @@ class NotesProvider extends ChangeNotifier {
   bool _enableHeroTransitions = true;
   bool get enableHeroTransitions => _enableAnimations && _enableHeroTransitions;
 
+  bool _enableGridAnimations = true;
+  bool get enableGridAnimations => _enableAnimations && _enableGridAnimations;
+
+  bool _enableButtonBounce = true;
+  bool get enableButtonBounce => _enableAnimations && _enableButtonBounce;
+
+  bool _enableFabPulse = true;
+  bool get enableFabPulse => _enableAnimations && _enableFabPulse;
+
   bool _enableGlassmorphism = true;
   bool get enableGlassmorphism => _enableGlassmorphism;
 
@@ -88,6 +97,9 @@ class NotesProvider extends ChangeNotifier {
     _enableCardAnimations = _settingsBox.get('enableCardAnimations', defaultValue: true);
     _enableChipAnimations = _settingsBox.get('enableChipAnimations', defaultValue: true);
     _enableHeroTransitions = _settingsBox.get('enableHeroTransitions', defaultValue: true);
+    _enableGridAnimations = _settingsBox.get('enableGridAnimations', defaultValue: true);
+    _enableButtonBounce = _settingsBox.get('enableButtonBounce', defaultValue: true);
+    _enableFabPulse = _settingsBox.get('enableFabPulse', defaultValue: true);
     _enableGlassmorphism = _settingsBox.get('enableGlassmorphism', defaultValue: true);
     notifyListeners();
   }
@@ -130,6 +142,27 @@ class NotesProvider extends ChangeNotifier {
   void toggleHeroTransitions() {
     _enableHeroTransitions = !_enableHeroTransitions;
     _settingsBox.put('enableHeroTransitions', _enableHeroTransitions);
+    HapticFeedback.lightImpact();
+    notifyListeners();
+  }
+
+  void toggleGridAnimations() {
+    _enableGridAnimations = !_enableGridAnimations;
+    _settingsBox.put('enableGridAnimations', _enableGridAnimations);
+    HapticFeedback.lightImpact();
+    notifyListeners();
+  }
+
+  void toggleButtonBounce() {
+    _enableButtonBounce = !_enableButtonBounce;
+    _settingsBox.put('enableButtonBounce', _enableButtonBounce);
+    HapticFeedback.lightImpact();
+    notifyListeners();
+  }
+
+  void toggleFabPulse() {
+    _enableFabPulse = !_enableFabPulse;
+    _settingsBox.put('enableFabPulse', _enableFabPulse);
     HapticFeedback.lightImpact();
     notifyListeners();
   }

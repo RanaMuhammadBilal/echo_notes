@@ -4,6 +4,7 @@ import 'package:echo_notes/AuthenticationProvider.dart';
 import 'package:echo_notes/ThemeProvider.dart';
 import 'package:echo_notes/models/note_model.dart';
 import 'package:echo_notes/provider_notes.dart';
+import 'package:echo_notes/screens/AnimationControlScreen.dart';
 import 'package:echo_notes/screens/DetailScreen.dart';
 import 'package:echo_notes/screens/HomePage.dart';
 import 'package:echo_notes/screens/SearchScreen.dart';
@@ -159,6 +160,18 @@ void main() {
       provider.toggleNoteBorder();
       expect(provider.showNoteBorder, equals(!initialBorder));
 
+      final initialGridAnim = provider.enableGridAnimations;
+      provider.toggleGridAnimations();
+      expect(provider.enableGridAnimations, equals(!initialGridAnim));
+
+      final initialButtonBounce = provider.enableButtonBounce;
+      provider.toggleButtonBounce();
+      expect(provider.enableButtonBounce, equals(!initialButtonBounce));
+
+      final initialFabPulse = provider.enableFabPulse;
+      provider.toggleFabPulse();
+      expect(provider.enableFabPulse, equals(!initialFabPulse));
+
       final initialAnim = provider.enableAnimations;
       provider.toggleAnimations();
       expect(provider.enableAnimations, equals(!initialAnim));
@@ -271,8 +284,19 @@ void main() {
 
       expect(find.text('Settings'), findsOneWidget);
       expect(find.text('App Theme'), findsOneWidget);
-      expect(find.text('App Animations'), findsOneWidget);
-      expect(find.text('Glassmorphic Blur Effects'), findsOneWidget);
+      expect(find.text('Animation Control Center'), findsOneWidget);
+    });
+
+    testWidgets('AnimationControlScreen renders Master & Fine-grained Switches',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(buildTestApp(const AnimationControlScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Animation Control Center'), findsOneWidget);
+      expect(find.text('Master Animations Switch'), findsOneWidget);
+      expect(find.text('Card Entrance Animations'), findsOneWidget);
+      expect(find.text('Grid / List Layout Motion'), findsOneWidget);
+      expect(find.text('Tactile Button Spring Bounce'), findsOneWidget);
     });
   });
 }
