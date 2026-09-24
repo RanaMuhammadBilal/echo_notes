@@ -29,6 +29,7 @@ class AnimationControlScreen extends StatelessWidget {
         children: [
           // Master Animation Switch Card
           Card(
+            clipBehavior: Clip.antiAlias,
             elevation: 0,
             color: notesProvider.enableAnimations
                 ? colorScheme.primaryContainer.withAlpha(120)

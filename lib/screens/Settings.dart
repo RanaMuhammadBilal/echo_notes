@@ -303,6 +303,7 @@ class SettingsState extends State<Settings> {
 
           // --- BACKUP & RESTORE SECTION ---
           Card(
+            clipBehavior: Clip.antiAlias,
             elevation: 0,
             color: colorScheme.surfaceContainerHighest.withAlpha(80),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
